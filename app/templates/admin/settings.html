@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<h1>站点设置</h1>
+
+<form method="post" action="/admin/settings">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div class="form-group">
+        <label>站点标题</label>
+        <input type="text" name="site_title" value="{{ site_settings.get('site_title', '') }}">
+    </div>
+
+    <div class="form-group">
+        <label>站点副标题</label>
+        <input type="text" name="site_subtitle" value="{{ site_settings.get('site_subtitle', '') }}">
+    </div>
+
+    <div class="form-group">
+        <label>站点描述</label>
+        <textarea name="site_description" rows="3">{{ site_settings.get('site_description', '') }}</textarea>
+    </div>
+
+    <div class="form-group">
+        <label>头像 URL</label>
+        <input type="text" name="site_avatar" value="{{ site_settings.get('site_avatar', '') }}">
+    </div>
+
+    <div class="form-group">
+        <label>GitHub 链接</label>
+        <input type="text" name="github_url" value="{{ site_settings.get('github_url', '') }}">
+    </div>
+
+    <div class="form-group">
+        <label>关于页面内容（Markdown）</label>
+        <textarea name="about_content" rows="10">{{ site_settings.get('about_content', '') }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">保存设置</button>
+</form>
+{% endblock %}

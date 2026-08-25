@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}归档 - {{ site.title }}{% endblock %}
+
+{% block content %}
+<h1 class="page-title">归档</h1>
+
+{% for year, posts in archives.items() %}
+<div class="archive-year">
+    <h2>{{ year }} 年</h2>
+    <ul class="archive-list">
+        {% for post in posts %}
+        <li>
+            <span class="archive-date">{{ post.created_at.strftime('%m-%d') }}</span>
+            <a href="/post/{{ post.slug }}">{{ post.title }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% else %}
+<p class="empty">暂无文章</p>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<h1>分类管理</h1>
+
+<form method="post" action="/admin/categories" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="text" name="name" placeholder="分类名称" required>
+    <input type="text" name="description" placeholder="描述（可选）">
+    <button type="submit" class="btn btn-primary">添加</button>
+</form>
+
+<table class="admin-table">
+    <thead>
+        <tr>
+            <th>名称</th>
+            <th>描述</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for cat in categories %}
+        <tr>
+            <td>{{ cat.name }}</td>
+            <td>{{ cat.description or '-' }}</td>
+            <td>
+                <form method="post" action="/admin/category/{{ cat.id }}/delete" style="display:inline;" onsubmit="return confirm('确定删除？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-danger">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="empty">暂无分类</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

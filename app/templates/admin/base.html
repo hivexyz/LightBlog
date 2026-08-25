@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}管理后台 - LightBlog{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="admin-body">
+    <aside class="admin-sidebar">
+        <h2>LightBlog</h2>
+        <nav>
+            <a href="/admin/">仪表盘</a>
+            <a href="/admin/posts">文章</a>
+            <a href="/admin/categories">分类</a>
+            <a href="/admin/tags">标签</a>
+            <a href="/admin/settings">设置</a>
+            <a href="/" target="_blank">查看站点</a>
+            <a href="/admin/logout">退出</a>
+        </nav>
+    </aside>
+    <main class="admin-main">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

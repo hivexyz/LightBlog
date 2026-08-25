@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}关于 - {{ site.title }}{% endblock %}
+
+{% block content %}
+<h1 class="page-title">关于</h1>
+<div class="about-content">
+    {{ about_html | safe }}
+</div>
+{% endblock %}

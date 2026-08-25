@@ -1,0 +1,76 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ '编辑文章' if post else '新建文章' }} - LightBlog{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+{% endblock %}
+
+{% block content %}
+<h1>{{ '编辑文章' if post else '新建文章' }}</h1>
+
+<form method="post" action="{{ '/admin/post/' ~ post.id ~ '/edit' if post else '/admin/post/new' }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div class="form-group">
+        <label>标题</label>
+        <input type="text" name="title" value="{{ post.title if post else '' }}" required>
+    </div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label>分类</label>
+            <select name="category_id">
+                <option value="">无分类</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if post and post.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>状态</label>
+            <select name="status">
+                <option value="1" {% if not post or post.status == 1 %}selected{% endif %}>已发布</option>
+                <option value="0" {% if post and post.status == 0 %}selected{% endif %}>草稿</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>标签</label>
+        <div class="tag-checkboxes">
+            {% for tag in tags %}
+            <label class="tag-checkbox">
+                <input type="checkbox" name="tag_ids" value="{{ tag.id }}"
+                    {% if post and tag in post.tags %}checked{% endif %}>
+                {{ tag.name }}
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>封面图 URL</label>
+        <input type="text" name="cover_image" value="{{ post.cover_image if post else '' }}" placeholder="可选">
+    </div>
+
+    <div class="form-group">
+        <label>内容（Markdown）</label>
+        <textarea id="content-editor" name="content" rows="20">{{ post.content if post else '' }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">保存</button>
+    <a href="/admin/posts" class="btn">取消</a>
+</form>
+
+<script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script src="/static/js/editor.js"></script>
+<script>
+const csrfToken = '{{ csrf_token }}';
+initEditor('content-editor', csrfToken);
+</script>
+{% endblock %}

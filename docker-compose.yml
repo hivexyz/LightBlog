@@ -1,0 +1,26 @@
+services:
+  web:
+    build: .
+    expose:
+      - "8000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    environment:
+      - SECRET_KEY=change-me-in-production
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=change-me
+      - COOKIE_SECURE=false
+      - DATABASE_URL=sqlite:///./data/blog.db
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./uploads:/app/uploads:ro
+    depends_on:
+      - web
+    restart: always

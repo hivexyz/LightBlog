@@ -1,0 +1,54 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<h1>仪表盘</h1>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ total_posts }}</div>
+        <div class="stat-label">总文章数</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ published_posts }}</div>
+        <div class="stat-label">已发布</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ total_views }}</div>
+        <div class="stat-label">总浏览量</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ total_categories }}</div>
+        <div class="stat-label">分类数</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ total_tags }}</div>
+        <div class="stat-label">标签数</div>
+    </div>
+</div>
+
+<h2>最近文章</h2>
+<table class="admin-table">
+    <thead>
+        <tr>
+            <th>标题</th>
+            <th>状态</th>
+            <th>浏览量</th>
+            <th>创建时间</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for post in recent_posts %}
+        <tr>
+            <td>{{ post.title }}</td>
+            <td>{{ '已发布' if post.status == 1 else '草稿' }}</td>
+            <td>{{ post.views }}</td>
+            <td>{{ post.created_at.strftime('%Y-%m-%d') }}</td>
+            <td>
+                <a href="/admin/post/{{ post.id }}/edit" class="btn btn-sm">编辑</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

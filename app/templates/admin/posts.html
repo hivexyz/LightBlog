@@ -1,0 +1,53 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>文章管理</h1>
+    <a href="/admin/post/new" class="btn btn-primary">新建文章</a>
+</div>
+
+<table class="admin-table">
+    <thead>
+        <tr>
+            <th>标题</th>
+            <th>分类</th>
+            <th>状态</th>
+            <th>浏览量</th>
+            <th>创建时间</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for post in posts %}
+        <tr>
+            <td>{{ post.title }}</td>
+            <td>{{ post.category.name if post.category else '-' }}</td>
+            <td>{{ '已发布' if post.status == 1 else '草稿' }}</td>
+            <td>{{ post.views }}</td>
+            <td>{{ post.created_at.strftime('%Y-%m-%d') }}</td>
+            <td>
+                <a href="/admin/post/{{ post.id }}/edit" class="btn btn-sm">编辑</a>
+                <form method="post" action="/admin/post/{{ post.id }}/delete" style="display:inline;" onsubmit="return confirm('确定删除？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-danger">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty">暂无文章</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if total_pages > 1 %}
+<nav class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}" class="prev">上一页</a>
+    {% endif %}
+    <span class="page-info">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}" class="next">下一页</a>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}
