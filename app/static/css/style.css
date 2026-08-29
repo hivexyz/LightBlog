@@ -472,9 +472,15 @@ a:hover { text-decoration: underline; }
 }
 .EasyMDEContainer .CodeMirror {
     border: none;
-    min-height: 520px;
+    height: min(72vh, 760px);
+    min-height: 620px;
     font-size: 15px;
     line-height: 1.65;
+}
+.EasyMDEContainer .CodeMirror-scroll {
+    height: min(72vh, 760px) !important;
+    min-height: 620px !important;
+    overflow-y: auto !important;
 }
 .EasyMDEContainer .editor-preview,
 .EasyMDEContainer .editor-preview-side {
@@ -509,13 +515,14 @@ a:hover { text-decoration: underline; }
     font-weight: 600;
 }
 .editor-preview-content {
-    min-height: 574px;
-    max-height: 72vh;
+    height: min(72vh, 760px);
+    min-height: 620px;
     overflow: auto;
     padding: 22px;
 }
 .plain-editor-split textarea {
-    min-height: 574px;
+    height: min(72vh, 760px);
+    min-height: 620px;
     resize: vertical;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     line-height: 1.65;
@@ -806,7 +813,19 @@ body {
     }
 
     .editor-preview-content {
+        height: auto;
         min-height: 260px;
         max-height: none;
+    }
+
+    .EasyMDEContainer .CodeMirror,
+    .plain-editor-split textarea {
+        height: 55vh;
+        min-height: 360px;
+    }
+
+    .EasyMDEContainer .CodeMirror-scroll {
+        height: 55vh !important;
+        min-height: 360px !important;
     }
 }
