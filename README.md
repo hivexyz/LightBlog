@@ -220,6 +220,31 @@ data/blog.db
 uploads/
 ```
 
+## 服务器更新
+
+代码提交并推送到 GitHub 后，在服务器项目目录执行：
+
+```bash
+./scripts/deploy_update.sh
+```
+
+脚本会依次执行：
+
+- 检查工作区是否干净，避免覆盖服务器上的未提交改动
+- 备份 `data/blog.db`
+- `git pull --ff-only`
+- `docker compose build web`
+- `docker compose up -d`
+- 输出服务状态和最近 web 日志
+
+可选参数：
+
+```bash
+./scripts/deploy_update.sh --skip-backup      # 跳过数据库备份
+./scripts/deploy_update.sh --no-build         # 只拉代码并重启，不重新构建镜像
+./scripts/deploy_update.sh --legacy-compose   # 使用 docker-compose 命令
+```
+
 ## 技术方案
 
 详见 [docs/technical-design.md](docs/technical-design.md)
