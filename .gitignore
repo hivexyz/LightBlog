@@ -14,6 +14,8 @@ env/
 data/
 uploads/
 backups/
+certbot/
+*.log
 
 # Environment and secrets
 .env

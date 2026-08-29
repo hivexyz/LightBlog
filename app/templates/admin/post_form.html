@@ -71,7 +71,15 @@
                 <input type="file" id="content-image-file" accept="image/*">
             </label>
         </div>
-        <textarea id="content-editor" name="content" rows="20">{{ post.content if post else '' }}</textarea>
+        <div class="editor-split">
+            <div class="editor-pane">
+                <textarea id="content-editor" name="content" rows="20">{{ post.content if post else '' }}</textarea>
+            </div>
+            <div class="preview-pane">
+                <div class="preview-pane-title">预览</div>
+                <div id="content-preview" class="post-content editor-preview-content"></div>
+            </div>
+        </div>
     </div>
 
     <button type="submit" class="btn btn-primary">保存</button>
@@ -86,6 +94,7 @@
 <script>
 const csrfToken = '{{ csrf_token }}';
 const editor = initEditor('content-editor', csrfToken);
+initInlinePreview(editor, 'content-preview');
 initCoverUpload('cover-image-file', 'cover-image-input', 'cover-image-preview', csrfToken);
 initContentImageUpload('content-image-file', editor, csrfToken);
 </script>

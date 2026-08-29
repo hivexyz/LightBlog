@@ -459,6 +459,67 @@ a:hover { text-decoration: underline; }
     height: 96px;
     border-radius: 50%;
 }
+.EasyMDEContainer {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+}
+.EasyMDEContainer .editor-toolbar {
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: #f9fafb;
+}
+.EasyMDEContainer .CodeMirror {
+    border: none;
+    min-height: 520px;
+    font-size: 15px;
+    line-height: 1.65;
+}
+.EasyMDEContainer .editor-preview,
+.EasyMDEContainer .editor-preview-side {
+    background: #fff;
+    padding: 22px;
+}
+.EasyMDEContainer .editor-preview-side {
+    border-left: 1px solid var(--border);
+}
+.editor-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr);
+    gap: 18px;
+    align-items: stretch;
+}
+.editor-pane,
+.preview-pane {
+    min-width: 0;
+}
+.preview-pane {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+}
+.preview-pane-title {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: #f9fafb;
+    color: #475467;
+    font-size: 13px;
+    font-weight: 600;
+}
+.editor-preview-content {
+    min-height: 574px;
+    max-height: 72vh;
+    overflow: auto;
+    padding: 22px;
+}
+.plain-editor-split textarea {
+    min-height: 574px;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    line-height: 1.65;
+}
 
 /* 按钮 */
 .btn {
@@ -738,5 +799,14 @@ body {
 
     .admin-main {
         padding: 20px 16px;
+    }
+
+    .editor-split {
+        grid-template-columns: 1fr;
+    }
+
+    .editor-preview-content {
+        min-height: 260px;
+        max-height: none;
     }
 }

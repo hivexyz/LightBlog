@@ -55,7 +55,7 @@ def render_markdown(text: str) -> str:
     """
     extensions = [
         CodeHiliteExtension(guess_lang=False, linenums=False, css_class='highlight'),
-        TocExtension(permalink=True),
+        TocExtension(permalink=False),
         FencedCodeExtension(),
         TableExtension(),
         'extra',
