@@ -2,9 +2,26 @@
 
 {% block title %}关于 - {{ site.title }}{% endblock %}
 
+{% block extra_head %}
+{% if needs_code %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pygments-css@1.0.0/github.css">
+{% endif %}
+{% if needs_math %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <h1 class="page-title">关于</h1>
 <div class="about-content">
     {{ about_html | safe }}
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if needs_math %}
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script defer src="/static/js/math-render.js"></script>
+{% endif %}
 {% endblock %}

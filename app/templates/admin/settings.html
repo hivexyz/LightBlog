@@ -23,7 +23,15 @@
 
     <div class="form-group">
         <label>头像 URL</label>
-        <input type="text" name="site_avatar" value="{{ site_settings.get('site_avatar', '') }}">
+        <div class="upload-row">
+            <input type="text" id="site-avatar-input" name="site_avatar" value="{{ site_settings.get('site_avatar', '') }}">
+            <label class="btn upload-btn">
+                上传头像
+                <input type="file" id="site-avatar-file" accept="image/*">
+            </label>
+        </div>
+        <div class="upload-hint">支持 jpg、jpeg、png、gif、webp，最大 5MB。</div>
+        <img id="site-avatar-preview" class="avatar-preview" src="{{ site_settings.get('site_avatar', '') }}" alt="头像预览">
     </div>
 
     <div class="form-group">
@@ -38,4 +46,10 @@
 
     <button type="submit" class="btn btn-primary">保存设置</button>
 </form>
+
+<script src="/static/js/editor.js"></script>
+<script>
+const csrfToken = '{{ csrf_token }}';
+initImageUrlUpload('site-avatar-file', 'site-avatar-input', 'site-avatar-preview', csrfToken);
+</script>
 {% endblock %}

@@ -3,6 +3,7 @@ from io import BytesIO
 from PIL import Image
 from fastapi import APIRouter, Request, Depends, Form, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Post, Category, Tag, Setting
@@ -13,6 +14,7 @@ from app.auth import (
     require_admin, is_login_locked, record_login_failure, clear_login_attempts,
     generate_csrf_token, verify_csrf_token
 )
+from app.routes.main import clear_public_cache
 from app.utils import render_markdown, generate_slug, generate_summary, save_upload_file
 
 router = APIRouter(prefix='/admin')
@@ -115,8 +117,7 @@ def logout():
 def dashboard(request: Request, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     total_posts = db.query(Post).count()
     published_posts = db.query(Post).filter(Post.status == 1).count()
-    total_views = db.query(Post.views).all()
-    total_views = sum(v[0] for v in total_views) if total_views else 0
+    total_views = db.query(func.coalesce(func.sum(Post.views), 0)).scalar()
     total_categories = db.query(Category).count()
     total_tags = db.query(Tag).count()
     recent_posts = db.query(Post).order_by(Post.created_at.desc()).limit(5).all()
@@ -322,6 +323,7 @@ def create_category(
         category = Category(name=name, slug=slug, description=description)
         db.add(category)
         db.commit()
+        clear_public_cache()
     return RedirectResponse(url='/admin/categories', status_code=302)
 
 
@@ -340,6 +342,7 @@ def delete_category(
         db.query(Post).filter(Post.category_id == category_id).update({Post.category_id: None})
         db.delete(category)
         db.commit()
+        clear_public_cache()
     return RedirectResponse(url='/admin/categories', status_code=302)
 
 
@@ -369,6 +372,7 @@ def create_tag(
         tag = Tag(name=name, slug=slug)
         db.add(tag)
         db.commit()
+        clear_public_cache()
     return RedirectResponse(url='/admin/tags', status_code=302)
 
 
@@ -386,6 +390,7 @@ def delete_tag(
     if tag:
         db.delete(tag)
         db.commit()
+        clear_public_cache()
     return RedirectResponse(url='/admin/tags', status_code=302)
 
 
@@ -433,6 +438,7 @@ def update_settings(
         else:
             db.add(Setting(key=key, value=value))
     db.commit()
+    clear_public_cache()
     return RedirectResponse(url='/admin/settings', status_code=302)
 
 

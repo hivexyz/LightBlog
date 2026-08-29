@@ -2,6 +2,15 @@
 
 {% block title %}{{ post.title }} - {{ site.title }}{% endblock %}
 
+{% block extra_head %}
+{% if needs_code %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pygments-css@1.0.0/github.css">
+{% endif %}
+{% if needs_math %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <article class="post-detail">
     <h1 class="post-title">{{ post.title }}</h1>
@@ -12,9 +21,6 @@
         {% endif %}
         <span>· {{ post.views }} 阅读</span>
     </div>
-    {% if post.cover_image %}
-    <img src="{{ post.cover_image }}" alt="{{ post.title }}" class="post-cover" loading="lazy">
-    {% endif %}
     <div class="post-content">
         {{ post.content_html | safe }}
     </div>
@@ -24,4 +30,12 @@
         {% endfor %}
     </div>
 </article>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if needs_math %}
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script defer src="/static/js/math-render.js"></script>
+{% endif %}
 {% endblock %}

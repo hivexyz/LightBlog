@@ -5,19 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ site.description }}">
     <title>{% block title %}{{ site.title }}{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pygments-css@1.0.0/github.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260829">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
     <header class="site-header">
         <div class="container">
-            <a href="/" class="site-title">{{ site.title }}</a>
-            <p class="site-subtitle">{{ site.subtitle }}</p>
+            <div class="site-brand">
+                {% if site.avatar %}
+                <a href="/" class="site-avatar-link" aria-label="{{ site.title }}">
+                    <img src="{{ site.avatar }}" alt="{{ site.title }}" class="site-avatar">
+                </a>
+                {% endif %}
+                <div class="site-brand-text">
+                    <a href="/" class="site-title">{{ site.title }}</a>
+                    <p class="site-subtitle">{{ site.subtitle }}</p>
+                </div>
+            </div>
             <nav class="site-nav">
                 <a href="/">首页</a>
                 <a href="/archive">归档</a>
+                <a href="/search">搜索</a>
                 <a href="/about">关于</a>
                 <a href="/admin/">管理</a>
             </nav>
@@ -25,11 +33,13 @@
     </header>
 
     <main class="container main-content">
-        <div class="content-wrapper">
+        <div class="content-wrapper{% if not categories and not tags %} no-sidebar{% endif %}">
             <div class="content-main">
                 {% block content %}{% endblock %}
             </div>
+            {% if categories or tags %}
             <aside class="content-sidebar">
+                {% if categories %}
                 <div class="widget">
                     <h3>分类</h3>
                     <ul>
@@ -38,6 +48,8 @@
                         {% endfor %}
                     </ul>
                 </div>
+                {% endif %}
+                {% if tags %}
                 <div class="widget">
                     <h3>标签</h3>
                     <div class="tag-cloud">
@@ -46,7 +58,9 @@
                         {% endfor %}
                     </div>
                 </div>
+                {% endif %}
             </aside>
+            {% endif %}
         </div>
     </main>
 
@@ -56,9 +70,6 @@
         </div>
     </footer>
 
-    <!-- KaTeX 数学公式渲染 -->
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
-        onload="renderMathInElement(document.body, {delimiters: [{left: '\\\\(', right: '\\\\)', display: false}, {left: '\\\\[', right: '\\\\]', display: true}]});"></script>
+    {% block extra_scripts %}{% endblock %}
 </body>
 </html>

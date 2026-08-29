@@ -92,7 +92,11 @@ def generate_slug(text: str) -> str:
 
 def generate_summary(content: str, length: int = 200) -> str:
     """从 Markdown 内容生成纯文本摘要"""
-    text = re.sub(r'[#*`>\-!~\[\]()]', '', content)
+    text = re.sub(r'!\[[^\]]*\]\([^)]+\)', '', content)
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r'\$\$.*?\$\$', '', text, flags=re.S)
+    text = re.sub(r'\$[^$\n]+\$', '', text)
+    text = re.sub(r'[#*`>\-!~\[\]()]', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text[:length] + '...' if len(text) > length else text
 

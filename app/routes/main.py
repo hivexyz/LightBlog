@@ -2,12 +2,15 @@ from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session, load_only, selectinload, joinedload
 from sqlalchemy import or_
+import time
 from app.database import get_db
 from app.models import Post, Category, Tag, Setting
 from app.config import settings
 from app.view_counter import view_counter
 
 router = APIRouter()
+CACHE_TTL = 60
+_sidebar_cache = {'expires_at': 0.0, 'data': None}
 
 # 文章列表页只加载必要字段，避免加载 content/content_html 大字段
 POST_LIST_FIELDS = [
@@ -23,6 +26,12 @@ POST_LIST_OPTIONS = [
 ]
 
 
+def clear_public_cache():
+    """Invalidate low-churn public metadata cache after admin changes."""
+    _sidebar_cache['expires_at'] = 0.0
+    _sidebar_cache['data'] = None
+
+
 def get_site_settings(db: Session) -> dict:
     settings_map = {}
     for s in db.query(Setting).all():
@@ -33,6 +42,36 @@ def get_site_settings(db: Session) -> dict:
         'description': settings_map.get('site_description', '记录生活与技术'),
         'avatar': settings_map.get('site_avatar', ''),
         'github_url': settings_map.get('github_url', ''),
+    }
+
+
+def get_public_context(db: Session) -> dict:
+    """Return short-lived site/sidebar metadata shared by public pages."""
+    now = time.time()
+    cached = _sidebar_cache['data']
+    if cached and _sidebar_cache['expires_at'] > now:
+        return cached
+
+    data = {
+        'site': get_site_settings(db),
+        'categories': [
+            {'name': c.name, 'slug': c.slug}
+            for c in db.query(Category).order_by(Category.name.asc()).all()
+        ],
+        'tags': [
+            {'name': t.name, 'slug': t.slug}
+            for t in db.query(Tag).order_by(Tag.name.asc()).all()
+        ],
+    }
+    _sidebar_cache['data'] = data
+    _sidebar_cache['expires_at'] = now + CACHE_TTL
+    return data
+
+
+def get_content_assets(html: str) -> dict:
+    return {
+        'needs_code': 'class="highlight"' in html,
+        'needs_math': 'arithmatex' in html,
     }
 
 
@@ -47,18 +86,14 @@ def index(request: Request, page: int = Query(1, ge=1), db: Session = Depends(ge
     total = db.query(Post).filter(Post.status == 1).count()
     total_pages = (total + per_page - 1) // per_page
 
-    site = get_site_settings(db)
-    categories = db.query(Category).all()
-    tags = db.query(Tag).all()
+    public_context = get_public_context(db)
 
     return request.app.state.templates.TemplateResponse('index.html', {
         'request': request,
         'posts': posts,
         'page': page,
         'total_pages': total_pages,
-        'site': site,
-        'categories': categories,
-        'tags': tags,
+        **public_context,
     })
 
 
@@ -71,16 +106,13 @@ def post_detail(request: Request, slug: str, db: Session = Depends(get_db)):
     # 浏览量 +1（内存缓冲）
     view_counter.increment(post.id)
 
-    site = get_site_settings(db)
-    categories = db.query(Category).all()
-    tags = db.query(Tag).all()
+    public_context = get_public_context(db)
 
     return request.app.state.templates.TemplateResponse('post.html', {
         'request': request,
         'post': post,
-        'site': site,
-        'categories': categories,
-        'tags': tags,
+        **get_content_assets(post.content_html),
+        **public_context,
     })
 
 
@@ -99,9 +131,7 @@ def category(request: Request, slug: str, page: int = Query(1, ge=1), db: Sessio
     total = db.query(Post).filter(Post.status == 1, Post.category_id == category.id).count()
     total_pages = (total + per_page - 1) // per_page
 
-    site = get_site_settings(db)
-    categories = db.query(Category).all()
-    tags = db.query(Tag).all()
+    public_context = get_public_context(db)
 
     return request.app.state.templates.TemplateResponse('category.html', {
         'request': request,
@@ -109,9 +139,7 @@ def category(request: Request, slug: str, page: int = Query(1, ge=1), db: Sessio
         'posts': posts,
         'page': page,
         'total_pages': total_pages,
-        'site': site,
-        'categories': categories,
-        'tags': tags,
+        **public_context,
     })
 
 
@@ -132,9 +160,7 @@ def tag(request: Request, slug: str, page: int = Query(1, ge=1), db: Session = D
     ).count()
     total_pages = (total + per_page - 1) // per_page
 
-    site = get_site_settings(db)
-    categories = db.query(Category).all()
-    tags = db.query(Tag).all()
+    public_context = get_public_context(db)
 
     return request.app.state.templates.TemplateResponse('tag.html', {
         'request': request,
@@ -142,9 +168,7 @@ def tag(request: Request, slug: str, page: int = Query(1, ge=1), db: Session = D
         'posts': posts,
         'page': page,
         'total_pages': total_pages,
-        'site': site,
-        'categories': categories,
-        'tags': tags,
+        **public_context,
     })
 
 
@@ -163,16 +187,12 @@ def archive(request: Request, db: Session = Depends(get_db)):
             archives[year] = []
         archives[year].append(post)
 
-    site = get_site_settings(db)
-    categories = db.query(Category).all()
-    tags = db.query(Tag).all()
+    public_context = get_public_context(db)
 
     return request.app.state.templates.TemplateResponse('archive.html', {
         'request': request,
         'archives': archives,
-        'site': site,
-        'categories': categories,
-        'tags': tags,
+        **public_context,
     })
 
 
@@ -188,9 +208,7 @@ def search(request: Request, q: str = '', page: int = Query(1, ge=1), db: Sessio
     total = query.count()
     total_pages = (total + per_page - 1) // per_page
 
-    site = get_site_settings(db)
-    categories = db.query(Category).all()
-    tags = db.query(Tag).all()
+    public_context = get_public_context(db)
 
     return request.app.state.templates.TemplateResponse('search.html', {
         'request': request,
@@ -198,9 +216,7 @@ def search(request: Request, q: str = '', page: int = Query(1, ge=1), db: Sessio
         'posts': posts,
         'page': page,
         'total_pages': total_pages,
-        'site': site,
-        'categories': categories,
-        'tags': tags,
+        **public_context,
     })
 
 
@@ -210,16 +226,13 @@ def about(request: Request, db: Session = Depends(get_db)):
     about_setting = db.query(Setting).filter(Setting.key == 'about_content').first()
     about_html = render_markdown(about_setting.value) if about_setting else ''
 
-    site = get_site_settings(db)
-    categories = db.query(Category).all()
-    tags = db.query(Tag).all()
+    public_context = get_public_context(db)
 
     return request.app.state.templates.TemplateResponse('about.html', {
         'request': request,
         'about_html': about_html,
-        'site': site,
-        'categories': categories,
-        'tags': tags,
+        **get_content_assets(about_html),
+        **public_context,
     })
 
 
