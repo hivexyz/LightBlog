@@ -26,11 +26,18 @@
             <td>{{ post.views }}</td>
             <td>{{ post.created_at.strftime('%Y-%m-%d') }}</td>
             <td>
-                <a href="/admin/post/{{ post.id }}/edit" class="btn btn-sm">编辑</a>
-                <form method="post" action="/admin/post/{{ post.id }}/delete" style="display:inline;" onsubmit="return confirm('确定删除？')">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <button type="submit" class="btn btn-sm btn-danger">删除</button>
-                </form>
+                <div class="post-actions">
+                    <a href="/admin/post/{{ post.id }}/edit" class="btn btn-sm">编辑</a>
+                    <button type="button" class="btn btn-sm export-image-trigger"
+                        data-post-id="{{ post.id }}"
+                        data-post-title="{{ post.title }}">
+                        导出长图
+                    </button>
+                    <form method="post" action="/admin/post/{{ post.id }}/delete" style="display:inline;" onsubmit="return confirm('确定删除？')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit" class="btn btn-sm btn-danger">删除</button>
+                    </form>
+                </div>
             </td>
         </tr>
         {% else %}
@@ -50,4 +57,122 @@
     {% endif %}
 </nav>
 {% endif %}
+
+<div id="export-image-modal" class="modal-backdrop" hidden style="display: none;">
+    <div class="modal-panel export-image-modal" role="dialog" aria-modal="true" aria-labelledby="export-image-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="export-image-title">导出长图</h2>
+                <p id="export-image-post-title" class="modal-subtitle"></p>
+            </div>
+            <button type="button" class="modal-close" aria-label="关闭">×</button>
+        </div>
+
+        <div class="export-template-grid">
+            {% for item in export_image_templates %}
+            <label class="export-template-option">
+                <input type="radio" name="export_template" value="{{ item.id }}" {% if loop.first %}checked{% endif %}>
+                <span>{{ item.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <div class="export-preview-shell">
+            <img id="export-image-preview" class="export-image-preview" alt="长图预览">
+            <div id="export-image-loading" class="export-image-loading">生成预览中...</div>
+        </div>
+
+        <div class="modal-actions">
+            <button type="button" class="btn modal-cancel">取消</button>
+            <a id="export-image-download" href="#" class="btn btn-primary">下载 ZIP</a>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const modal = document.getElementById('export-image-modal');
+    const title = document.getElementById('export-image-post-title');
+    const preview = document.getElementById('export-image-preview');
+    const loading = document.getElementById('export-image-loading');
+    const download = document.getElementById('export-image-download');
+    const closeButtons = modal.querySelectorAll('.modal-close, .modal-cancel');
+    const templateInputs = modal.querySelectorAll('input[name="export_template"]');
+    let currentPostId = '';
+    let previewUrl = '';
+
+    function selectedTemplate() {
+        const checked = modal.querySelector('input[name="export_template"]:checked');
+        return checked ? checked.value : 'paper';
+    }
+
+    function setPreviewUrl(url) {
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+            previewUrl = '';
+        }
+        previewUrl = url;
+        preview.src = url;
+    }
+
+    async function refreshPreview() {
+        if (!currentPostId) return;
+        const template = selectedTemplate();
+        const query = new URLSearchParams({ template });
+        const previewEndpoint = `/admin/post/${currentPostId}/preview-image?${query}`;
+        download.href = `/admin/post/${currentPostId}/export-images?${query}`;
+        loading.hidden = false;
+        preview.hidden = true;
+        try {
+            const response = await fetch(previewEndpoint, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('preview failed');
+            const blob = await response.blob();
+            setPreviewUrl(URL.createObjectURL(blob));
+            preview.hidden = false;
+            loading.hidden = true;
+        } catch (error) {
+            loading.textContent = '预览生成失败，请直接下载重试';
+            loading.hidden = false;
+        }
+    }
+
+    function openModal(button) {
+        currentPostId = button.dataset.postId;
+        title.textContent = button.dataset.postTitle || '';
+        modal.hidden = false;
+        modal.style.display = '';
+        document.body.classList.add('modal-open');
+        loading.textContent = '生成预览中...';
+        refreshPreview();
+    }
+
+    function closeModal() {
+        modal.hidden = true;
+        modal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+        currentPostId = '';
+        preview.removeAttribute('src');
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+            previewUrl = '';
+        }
+    }
+
+    document.querySelectorAll('.export-image-trigger').forEach((button) => {
+        button.addEventListener('click', () => openModal(button));
+    });
+    templateInputs.forEach((input) => {
+        input.addEventListener('change', refreshPreview);
+    });
+    closeButtons.forEach((button) => {
+        button.addEventListener('click', closeModal);
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.hidden) closeModal();
+    });
+})();
+</script>
 {% endblock %}

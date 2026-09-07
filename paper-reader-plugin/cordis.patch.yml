@@ -1,0 +1,5 @@
+# Paper Reader plugin: host-side tools only.
+# The client UI is discovered automatically via the package's dsh.client manifest.
+- insert:
+    - id: paper-reader-host
+      name: dsh-paper-reader

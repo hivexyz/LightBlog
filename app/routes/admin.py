@@ -1,21 +1,27 @@
-import os
+import zipfile
 from io import BytesIO
+from urllib.parse import quote
 from PIL import Image
 from fastapi import APIRouter, Request, Depends, Form, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Post, Category, Tag, Setting
 from app.config import settings
 from app.auth import (
-    hash_password, verify_password, create_session, get_current_user,
+    hash_password, verify_password, create_session,
     get_session_id, get_csrf_nonce, _get_user_by_session,
     require_admin, is_login_locked, record_login_failure, clear_login_attempts,
     generate_csrf_token, verify_csrf_token
 )
 from app.routes.main import clear_public_cache
-from app.utils import render_markdown, generate_slug, generate_summary, save_upload_file
+from app.utils import (
+    render_markdown, generate_slug, generate_summary, save_upload_file,
+    export_markdown_chapter_images, get_export_image_templates,
+    normalize_export_image_template, render_markdown_chapter_preview_image,
+    safe_download_filename
+)
 
 router = APIRouter(prefix='/admin')
 
@@ -149,6 +155,7 @@ def posts_list(request: Request, page: int = 1, db: Session = Depends(get_db), u
         'page': page,
         'total_pages': total_pages,
         'csrf_token': make_csrf(request),
+        'export_image_templates': get_export_image_templates(),
     })
 
 
@@ -237,6 +244,75 @@ def edit_post_page(request: Request, post_id: int, db: Session = Depends(get_db)
         'tags': tags,
         'csrf_token': make_csrf(request),
     })
+
+
+@router.get('/post/{post_id}/export-images')
+def export_post_images(
+    post_id: int,
+    template: str = 'paper',
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin)
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404)
+
+    template = normalize_export_image_template(template)
+    images = export_markdown_chapter_images(
+        title=post.title,
+        content=post.content,
+        created_at=post.created_at,
+        template=template,
+        image_roots={
+            '/uploads/': settings.UPLOAD_DIR,
+            '/static/': 'app/static',
+        },
+    )
+
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as zip_file:
+        for filename, data in images:
+            zip_file.writestr(filename, data)
+
+    archive_name = f'{safe_download_filename(post.title, "post")}-长图.zip'
+    encoded_name = quote(archive_name)
+    return Response(
+        content=buffer.getvalue(),
+        media_type='application/zip',
+        headers={
+            'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_name}"
+        },
+    )
+
+
+@router.get('/post/{post_id}/preview-image')
+def preview_post_image(
+    post_id: int,
+    template: str = 'paper',
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin)
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404)
+
+    template = normalize_export_image_template(template)
+    image = render_markdown_chapter_preview_image(
+        title=post.title,
+        content=post.content,
+        created_at=post.created_at,
+        template=template,
+        image_roots={
+            '/uploads/': settings.UPLOAD_DIR,
+            '/static/': 'app/static',
+        },
+    )
+
+    return Response(
+        content=image,
+        media_type='image/png',
+        headers={'Cache-Control': 'no-store'},
+    )
 
 
 @router.post('/post/{post_id}/edit')
