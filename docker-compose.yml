@@ -1,6 +1,9 @@
 services:
   web:
-    build: .
+    build:
+      context: .
+      args:
+        PYTHON_BASE_IMAGE: registry.cn-hangzhou.aliyuncs.com/library/python:3.11-slim
     expose:
       - "8000"
     volumes:
@@ -15,7 +18,7 @@ services:
     restart: always
 
   nginx:
-    image: nginx:alpine
+    image: registry.cn-hangzhou.aliyuncs.com/library/nginx:alpine
     ports:
       - "80:80"
     volumes:
