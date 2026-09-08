@@ -620,14 +620,26 @@ a:hover { text-decoration: underline; }
     font-size: 22px;
     line-height: 1;
 }
-.export-template-grid {
+.export-options {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     padding: 16px 20px;
     border-bottom: 1px solid var(--border);
 }
-.export-template-option {
+.export-option-section h3 {
+    margin: 0 0 8px;
+    color: #344054;
+    font-size: 13px;
+}
+.export-option-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+.export-font-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.export-option {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -638,7 +650,7 @@ a:hover { text-decoration: underline; }
     color: #344054;
     background: #fff;
 }
-.export-template-option:has(input:checked) {
+.export-option:has(input:checked) {
     border-color: var(--primary);
     background: var(--primary-soft);
     color: var(--primary);
@@ -928,7 +940,8 @@ body {
         max-height: calc(100vh - 24px);
     }
 
-    .export-template-grid {
+    .export-option-grid,
+    .export-font-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 

@@ -18,7 +18,8 @@ from app.auth import (
 from app.routes.main import clear_public_cache
 from app.utils import (
     render_markdown, generate_slug, generate_summary, save_upload_file,
-    export_markdown_chapter_images, get_export_image_templates,
+    export_markdown_chapter_images, get_export_image_fonts,
+    get_export_image_templates, normalize_export_image_font,
     normalize_export_image_template, render_markdown_chapter_preview_image,
     safe_download_filename
 )
@@ -156,6 +157,7 @@ def posts_list(request: Request, page: int = 1, db: Session = Depends(get_db), u
         'total_pages': total_pages,
         'csrf_token': make_csrf(request),
         'export_image_templates': get_export_image_templates(),
+        'export_image_fonts': get_export_image_fonts(),
     })
 
 
@@ -250,6 +252,7 @@ def edit_post_page(request: Request, post_id: int, db: Session = Depends(get_db)
 def export_post_images(
     post_id: int,
     template: str = 'paper',
+    font: str = 'noto-sans-cjk',
     db: Session = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -258,11 +261,13 @@ def export_post_images(
         raise HTTPException(status_code=404)
 
     template = normalize_export_image_template(template)
+    font = normalize_export_image_font(font)
     images = export_markdown_chapter_images(
         title=post.title,
         content=post.content,
         created_at=post.created_at,
         template=template,
+        font=font,
         image_roots={
             '/uploads/': settings.UPLOAD_DIR,
             '/static/': 'app/static',
@@ -289,6 +294,7 @@ def export_post_images(
 def preview_post_image(
     post_id: int,
     template: str = 'paper',
+    font: str = 'noto-sans-cjk',
     db: Session = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -297,11 +303,13 @@ def preview_post_image(
         raise HTTPException(status_code=404)
 
     template = normalize_export_image_template(template)
+    font = normalize_export_image_font(font)
     image = render_markdown_chapter_preview_image(
         title=post.title,
         content=post.content,
         created_at=post.created_at,
         template=template,
+        font=font,
         image_roots={
             '/uploads/': settings.UPLOAD_DIR,
             '/static/': 'app/static',

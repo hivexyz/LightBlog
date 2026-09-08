@@ -68,13 +68,29 @@
             <button type="button" class="modal-close" aria-label="关闭">×</button>
         </div>
 
-        <div class="export-template-grid">
-            {% for item in export_image_templates %}
-            <label class="export-template-option">
-                <input type="radio" name="export_template" value="{{ item.id }}" {% if loop.first %}checked{% endif %}>
-                <span>{{ item.name }}</span>
-            </label>
-            {% endfor %}
+        <div class="export-options">
+            <section class="export-option-section">
+                <h3>样式</h3>
+                <div class="export-option-grid">
+                    {% for item in export_image_templates %}
+                    <label class="export-option">
+                        <input type="radio" name="export_template" value="{{ item.id }}" {% if loop.first %}checked{% endif %}>
+                        <span>{{ item.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </section>
+            <section class="export-option-section">
+                <h3>字体</h3>
+                <div class="export-option-grid export-font-grid">
+                    {% for item in export_image_fonts %}
+                    <label class="export-option">
+                        <input type="radio" name="export_font" value="{{ item.id }}" {% if loop.first %}checked{% endif %}>
+                        <span>{{ item.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </section>
         </div>
 
         <div class="export-preview-shell">
@@ -98,12 +114,18 @@
     const download = document.getElementById('export-image-download');
     const closeButtons = modal.querySelectorAll('.modal-close, .modal-cancel');
     const templateInputs = modal.querySelectorAll('input[name="export_template"]');
+    const fontInputs = modal.querySelectorAll('input[name="export_font"]');
     let currentPostId = '';
     let previewUrl = '';
 
     function selectedTemplate() {
         const checked = modal.querySelector('input[name="export_template"]:checked');
         return checked ? checked.value : 'paper';
+    }
+
+    function selectedFont() {
+        const checked = modal.querySelector('input[name="export_font"]:checked');
+        return checked ? checked.value : 'noto-sans-cjk';
     }
 
     function setPreviewUrl(url) {
@@ -118,7 +140,8 @@
     async function refreshPreview() {
         if (!currentPostId) return;
         const template = selectedTemplate();
-        const query = new URLSearchParams({ template });
+        const font = selectedFont();
+        const query = new URLSearchParams({ template, font });
         const previewEndpoint = `/admin/post/${currentPostId}/preview-image?${query}`;
         download.href = `/admin/post/${currentPostId}/export-images?${query}`;
         loading.hidden = false;
@@ -162,6 +185,9 @@
         button.addEventListener('click', () => openModal(button));
     });
     templateInputs.forEach((input) => {
+        input.addEventListener('change', refreshPreview);
+    });
+    fontInputs.forEach((input) => {
         input.addEventListener('change', refreshPreview);
     });
     closeButtons.forEach((button) => {

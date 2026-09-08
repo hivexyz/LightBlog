@@ -2,9 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装中文字体，供 Markdown 长图导出使用
+# 安装中文字体，供 Markdown 长图导出选择使用
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-noto-cjk \
+    && apt-get install -y --no-install-recommends \
+        fonts-noto-cjk \
+        fonts-wqy-microhei \
+        fonts-wqy-zenhei \
+        fonts-arphic-uming \
+        fonts-arphic-ukai \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖

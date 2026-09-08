@@ -132,6 +132,93 @@ EXPORT_IMAGE_TEMPLATES = [
 ]
 
 
+EXPORT_IMAGE_FONTS = [
+    {'id': 'noto-sans-cjk', 'name': '思源黑体'},
+    {'id': 'noto-serif-cjk', 'name': '思源宋体'},
+    {'id': 'wenquanyi-microhei', 'name': '文泉驿微米黑'},
+    {'id': 'wenquanyi-zenhei', 'name': '文泉驿正黑'},
+    {'id': 'arphic-uming', 'name': '文鼎明体'},
+    {'id': 'arphic-ukai', 'name': '文鼎楷体'},
+]
+
+
+_EXPORT_IMAGE_FONT_CONFIGS = {
+    'noto-sans-cjk': {
+        'regular': [
+            '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+            ('/System/Library/Fonts/Hiragino Sans GB.ttc', 0),
+            ('/System/Library/Fonts/STHeiti Light.ttc', 1),
+        ],
+        'bold': [
+            '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc',
+            ('/System/Library/Fonts/Hiragino Sans GB.ttc', 2),
+            ('/System/Library/Fonts/STHeiti Medium.ttc', 1),
+        ],
+    },
+    'noto-serif-cjk': {
+        'regular': [
+            '/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc',
+            '/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc',
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 6),
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 4),
+        ],
+        'bold': [
+            '/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc',
+            '/usr/share/fonts/truetype/noto/NotoSerifCJK-Bold.ttc',
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 1),
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 0),
+        ],
+    },
+    'wenquanyi-microhei': {
+        'regular': [
+            '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+            '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+            ('/System/Library/Fonts/STHeiti Light.ttc', 1),
+        ],
+        'bold': [
+            '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+            '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+            ('/System/Library/Fonts/STHeiti Medium.ttc', 1),
+        ],
+    },
+    'wenquanyi-zenhei': {
+        'regular': [
+            '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+            ('/System/Library/Fonts/STHeiti Light.ttc', 1),
+        ],
+        'bold': [
+            '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+            ('/System/Library/Fonts/STHeiti Medium.ttc', 1),
+        ],
+    },
+    'arphic-uming': {
+        'regular': [
+            '/usr/share/fonts/truetype/arphic/uming.ttc',
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 4),
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 6),
+        ],
+        'bold': [
+            '/usr/share/fonts/truetype/arphic/uming.ttc',
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 1),
+        ],
+    },
+    'arphic-ukai': {
+        'regular': [
+            '/usr/share/fonts/truetype/arphic/ukai.ttc',
+            '/System/Library/Fonts/Supplemental/Kaiti.ttc',
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 3),
+        ],
+        'bold': [
+            '/usr/share/fonts/truetype/arphic/ukai.ttc',
+            '/System/Library/Fonts/Supplemental/Kaiti.ttc',
+            ('/System/Library/Fonts/Supplemental/Songti.ttc', 0),
+        ],
+    },
+}
+
+
 _EXPORT_IMAGE_TEMPLATE_CONFIGS = {
     'paper': {
         'font': 'serif',
@@ -224,8 +311,16 @@ def get_export_image_templates() -> list[dict[str, str]]:
     return list(EXPORT_IMAGE_TEMPLATES)
 
 
+def get_export_image_fonts() -> list[dict[str, str]]:
+    return list(EXPORT_IMAGE_FONTS)
+
+
 def normalize_export_image_template(template: str | None) -> str:
     return template if template in _EXPORT_IMAGE_TEMPLATE_CONFIGS else 'paper'
+
+
+def normalize_export_image_font(font: str | None) -> str:
+    return font if font in _EXPORT_IMAGE_FONT_CONFIGS else 'noto-sans-cjk'
 
 
 def _get_export_image_template(template: str | None) -> dict:
@@ -238,6 +333,7 @@ def export_markdown_chapter_images(
     created_at=None,
     image_roots: dict[str, str] | None = None,
     template: str = 'paper',
+    font: str = 'noto-sans-cjk',
 ) -> list[tuple[str, bytes]]:
     """将 Markdown 按 # / ## 章节拆分并导出为 PNG 长图。"""
     chapters = _split_markdown_chapters(content)
@@ -247,6 +343,7 @@ def export_markdown_chapter_images(
         renderer = _MarkdownImageRenderer(
             image_roots=image_roots or {},
             template=_get_export_image_template(template),
+            font=normalize_export_image_font(font),
         )
         png = renderer.render(
             article_title=title,
@@ -267,6 +364,7 @@ def render_markdown_chapter_preview_image(
     created_at=None,
     image_roots: dict[str, str] | None = None,
     template: str = 'paper',
+    font: str = 'noto-sans-cjk',
 ) -> bytes:
     """渲染第一章预览 PNG，供后台模板选择弹窗使用。"""
     chapters = _split_markdown_chapters(content)
@@ -274,6 +372,7 @@ def render_markdown_chapter_preview_image(
     renderer = _MarkdownImageRenderer(
         image_roots=image_roots or {},
         template=_get_export_image_template(template),
+        font=normalize_export_image_font(font),
     )
     return renderer.render(
         article_title=title,
@@ -336,7 +435,7 @@ class _MarkdownImageRenderer:
     margin_y = 88
     content_width = width - margin_x * 2
 
-    def __init__(self, image_roots: dict[str, str], template: dict):
+    def __init__(self, image_roots: dict[str, str], template: dict, font: str):
         self.image_roots = image_roots
         self.template = template
         self.bg_top = template['bg_top']
@@ -354,15 +453,15 @@ class _MarkdownImageRenderer:
         self.table_header_bg = template['table_header_bg']
         serif = template.get('font') == 'serif'
         self.fonts = {
-            'title': _load_font(54, bold=True, serif=serif),
-            'eyebrow': _load_font(22, serif=serif),
-            'meta': _load_font(21, serif=serif),
-            'h1': _load_font(39, bold=True, serif=serif),
-            'h2': _load_font(34, bold=True, serif=serif),
-            'h3': _load_font(29, bold=True, serif=serif),
-            'body': _load_font(26, serif=serif),
-            'bold': _load_font(26, bold=True, serif=serif),
-            'small': _load_font(21),
+            'title': _load_font(54, bold=True, serif=serif, font_id=font),
+            'eyebrow': _load_font(22, serif=serif, font_id=font),
+            'meta': _load_font(21, serif=serif, font_id=font),
+            'h1': _load_font(39, bold=True, serif=serif, font_id=font),
+            'h2': _load_font(34, bold=True, serif=serif, font_id=font),
+            'h3': _load_font(29, bold=True, serif=serif, font_id=font),
+            'body': _load_font(26, serif=serif, font_id=font),
+            'bold': _load_font(26, bold=True, serif=serif, font_id=font),
+            'small': _load_font(21, font_id=font),
             'code': _load_font(21, mono=True),
         }
 
@@ -956,8 +1055,17 @@ def _mix_color(start: str, end: str, ratio: float) -> tuple[int, int, int]:
     return tuple(round(a + (b - a) * ratio) for a, b in zip(start_rgb, end_rgb))
 
 
-def _load_font(size: int, bold: bool = False, mono: bool = False, serif: bool = False):
+def _load_font(
+    size: int,
+    bold: bool = False,
+    mono: bool = False,
+    serif: bool = False,
+    font_id: str | None = None,
+):
     candidates = []
+    font_config = _EXPORT_IMAGE_FONT_CONFIGS.get(normalize_export_image_font(font_id)) if font_id else None
+    if font_config and not mono:
+        candidates.extend(font_config['bold' if bold else 'regular'])
     if mono:
         candidates.extend([
             '/System/Library/Fonts/Hiragino Sans GB.ttc',
@@ -1002,10 +1110,11 @@ def _load_font(size: int, bold: bool = False, mono: bool = False, serif: bool = 
         '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
     ])
 
-    for path in candidates:
+    for candidate in candidates:
+        path, index = candidate if isinstance(candidate, tuple) else (candidate, 0)
         if os.path.exists(path):
             try:
-                return ImageFont.truetype(path, size)
+                return ImageFont.truetype(path, size, index=index)
             except Exception:
                 continue
     return ImageFont.load_default()
