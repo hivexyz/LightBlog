@@ -463,6 +463,8 @@ class _MarkdownImageRenderer:
             'bold': _load_font(26, bold=True, serif=serif, font_id=font),
             'small': _load_font(21, font_id=font),
             'code': _load_font(21, mono=True),
+            'math': _load_font(26, font_id=font),
+            'math_small': _load_font(18, font_id=font),
         }
 
     def render(
@@ -602,6 +604,9 @@ class _MarkdownImageRenderer:
             return y + 18
 
         if kind == 'paragraph':
+            if block.get('segments'):
+                y = self._add_inline_segments(ops, draw, block['segments'], x, y, self.content_width, self.text, 12)
+                return y + 20
             y = self._add_wrapped_text(ops, draw, block['text'], self.fonts['body'], x, y, self.content_width, self.text, 12)
             return y + 20
 
@@ -693,23 +698,28 @@ class _MarkdownImageRenderer:
         })
         y += _line_height(self.fonts['small']) + 14
 
-        math_text = _format_latex_text(text) or '$$'
-        for raw_line in math_text.splitlines():
-            lines = _wrap_text(draw, raw_line.strip(), self.fonts['code'], self.content_width - pad_x * 2)
-            line_height = _line_height(self.fonts['code']) + 10
-            for line in lines:
-                ops.append({
-                    'type': 'text',
-                    'xy': (x + pad_x, y),
-                    'text': line,
-                    'font': self.fonts['code'],
-                    'fill': self.ink,
-                })
-                y += line_height
+        for raw_line in text.splitlines() or ['']:
+            tokens = _format_latex_tokens(raw_line.strip())
+            if not tokens:
+                continue
+            y = self._add_math_line(
+                ops,
+                draw,
+                tokens,
+                x + pad_x,
+                y,
+                self.content_width - pad_x * 2,
+            )
+            y += 12
 
         y += pad_y
         box['xy'][3] = y
         return y + 24
+
+    def _add_math_line(self, ops, draw, tokens, x, y, max_width):
+        normal_font = self.fonts['math']
+        small_font = self.fonts['math_small']
+        return _append_wrapped_math_tokens(ops, draw, tokens, x, y, max_width, normal_font, small_font, self.ink)
 
     def _layout_table(self, ops, draw, rows, x, y):
         if not rows:
@@ -807,6 +817,25 @@ class _MarkdownImageRenderer:
             y += line_height
         return y
 
+    def _add_inline_segments(self, ops, draw, segments, x, y, max_width, fill, line_gap):
+        normal_font = self.fonts['body']
+        math_font = self.fonts['math']
+        small_font = self.fonts['math_small']
+        atoms = list(_iter_inline_atoms(segments))
+        return _append_wrapped_math_tokens(
+            ops,
+            draw,
+            atoms,
+            x,
+            y,
+            max_width,
+            math_font,
+            small_font,
+            fill,
+            plain_font=normal_font,
+            line_gap=line_gap,
+        )
+
 
 def _parse_markdown_blocks(content: str) -> list[dict]:
     blocks = []
@@ -816,9 +845,10 @@ def _parse_markdown_blocks(content: str) -> list[dict]:
 
     def flush_paragraph():
         if paragraph:
-            text = _clean_inline_markdown(' '.join(line.strip() for line in paragraph))
+            raw_text = ' '.join(line.strip() for line in paragraph)
+            text = _clean_inline_markdown(raw_text)
             if text:
-                blocks.append({'kind': 'paragraph', 'text': text})
+                blocks.append({'kind': 'paragraph', 'text': text, 'segments': _parse_inline_segments(raw_text)})
             paragraph.clear()
 
     while i < len(lines):
@@ -960,68 +990,590 @@ def _clean_inline_markdown(text: str) -> str:
     return text.strip()
 
 
+def _parse_inline_segments(text: str) -> list[dict]:
+    segments = []
+    position = 0
+    for match in re.finditer(r'\$(?!\$)([^$\n]+)\$', text):
+        if match.start() > position:
+            plain = _clean_inline_markdown_no_math(text[position:match.start()])
+            if plain:
+                segments.append({'kind': 'text', 'text': plain})
+        tokens = _format_latex_tokens(match.group(1))
+        if tokens:
+            _mark_compact_math_tokens(tokens)
+            segments.append({'kind': 'math', 'tokens': tokens})
+        position = match.end()
+    if position < len(text):
+        plain = _clean_inline_markdown_no_math(text[position:])
+        if plain:
+            segments.append({'kind': 'text', 'text': plain})
+    return segments
+
+
+def _clean_inline_markdown_no_math(text: str) -> str:
+    text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    text = re.sub(r'(\*\*|__)(.*?)\1', r'\2', text)
+    text = re.sub(r'(\*|_)(.*?)\1', r'\2', text)
+    text = re.sub(r'<[^>]+>', '', text)
+    return text
+
+
+def _iter_inline_atoms(segments: list[dict]):
+    for segment in segments:
+        if segment['kind'] == 'math':
+            for token in segment['tokens']:
+                yield {**token, 'math': True}
+            continue
+
+        for part in re.findall(r'\s+|[^\s]+', segment['text']):
+            yield {'type': 'text', 'text': part, 'math': False}
+
+
+def _mark_compact_math_tokens(tokens):
+    for token in tokens:
+        token['compact'] = True
+        if token['type'] == 'frac':
+            _mark_compact_math_tokens(token['numerator'])
+            _mark_compact_math_tokens(token['denominator'])
+        elif token['type'] == 'scripted':
+            token['base']['compact'] = True
+            _mark_compact_math_tokens([token['base']])
+
+
+def _measure_math_tokens(draw, tokens, normal_font, small_font) -> tuple[int, int]:
+    width = 0
+    height = _line_height(normal_font) + 14
+    for token in tokens:
+        token_width, token_height = _measure_math_token(draw, token, normal_font, small_font)
+        width += token_width
+        height = max(height, token_height)
+    return int(width), int(height)
+
+
+def _measure_math_token(draw, token, normal_font, small_font) -> tuple[int, int]:
+    if token['type'] == 'frac':
+        if token.get('compact'):
+            text = _compact_frac_text(token)
+            return int(draw.textlength(text, font=normal_font)), _line_height(normal_font) + 14
+        return _measure_frac_token(draw, token, normal_font, small_font)
+    if token['type'] == 'scripted':
+        return _measure_scripted_token(draw, token, normal_font, small_font)
+    font = token.get('plain_font') or (small_font if token['type'] in ('sup', 'sub') else normal_font)
+    return int(draw.textlength(token['text'], font=font)), _line_height(font) + 14
+
+
+def _measure_scripted_token(draw, token, normal_font, small_font) -> tuple[int, int]:
+    base_width, base_height = _measure_math_token(draw, token['base'], normal_font, small_font)
+    sup_width = int(draw.textlength(token.get('sup') or '', font=small_font))
+    sub_width = int(draw.textlength(token.get('sub') or '', font=small_font))
+    if _is_display_operator(token):
+        width = max(base_width, sup_width, sub_width) + 8
+        height = base_height + (18 if token.get('sup') else 0) + (18 if token.get('sub') else 0)
+        return width, height
+    return base_width + max(sup_width, sub_width) + 4, max(base_height, _line_height(normal_font) + 24)
+
+
+def _measure_frac_token(draw, token, normal_font, small_font) -> tuple[int, int]:
+    numerator_width, numerator_height = _measure_math_tokens(draw, token['numerator'], small_font, small_font)
+    denominator_width, denominator_height = _measure_math_tokens(draw, token['denominator'], small_font, small_font)
+    width = max(numerator_width, denominator_width) + 14
+    height = numerator_height + denominator_height + 10
+    return width, height
+
+
+def _append_wrapped_math_tokens(
+    ops,
+    draw,
+    tokens,
+    x,
+    y,
+    max_width,
+    normal_font,
+    small_font,
+    fill,
+    plain_font=None,
+    line_gap=10,
+):
+    lines = []
+    current = []
+    current_width = 0
+    current_height = 0
+    base_height = max(_line_height(plain_font or normal_font), _line_height(normal_font)) + line_gap + 8
+
+    for token in tokens:
+        token = dict(token)
+        if plain_font and not token.get('math') and token['type'] == 'text':
+            token['plain_font'] = plain_font
+        width, height = _measure_math_token(draw, token, normal_font, small_font)
+        if current and current_width + width > max_width:
+            lines.append((current, current_height or base_height))
+            current = []
+            current_width = 0
+            current_height = 0
+            if token.get('text', '').isspace():
+                continue
+        current.append((token, width, height))
+        current_width += width
+        current_height = max(current_height, height, base_height)
+
+    if current:
+        lines.append((current, current_height or base_height))
+
+    line_y = y
+    for line, height in lines:
+        cursor_x = x
+        for token, width, token_height in line:
+            _append_math_token_ops(ops, draw, token, cursor_x, line_y, height, normal_font, small_font, fill)
+            cursor_x += width
+        line_y += height
+    return line_y
+
+
+def _append_math_token_ops(ops, draw, token, x, y, line_height, normal_font, small_font, fill):
+    if token['type'] == 'frac':
+        if token.get('compact'):
+            text = _compact_frac_text(token)
+            baseline_y = y + max(0, (line_height - (_line_height(normal_font) + 14)) / 2)
+            ops.append({'type': 'text', 'xy': (x, baseline_y), 'text': text, 'font': normal_font, 'fill': fill})
+            return
+        width, height = _measure_frac_token(draw, token, normal_font, small_font)
+        _append_frac_ops(ops, draw, token, x, y + max(0, (line_height - height) / 2), normal_font, small_font, fill)
+        return
+
+    if token['type'] == 'scripted':
+        _append_scripted_token_ops(ops, draw, token, x, y, line_height, normal_font, small_font, fill)
+        return
+
+    font = token.get('plain_font') or (small_font if token['type'] in ('sup', 'sub') else normal_font)
+    text_height = _line_height(font)
+    baseline_y = y + max(0, (line_height - (_line_height(normal_font) + 14)) / 2)
+    if token['type'] == 'sup':
+        token_y = baseline_y - 8
+    elif token['type'] == 'sub':
+        token_y = baseline_y + 13
+    else:
+        token_y = baseline_y
+    ops.append({'type': 'text', 'xy': (x, token_y), 'text': token['text'], 'font': font, 'fill': fill})
+    if token['type'] == 'overline':
+        width = draw.textlength(token['text'], font=font)
+        ops.append({'type': 'line', 'xy': (x, token_y + 2, x + width, token_y + 2), 'fill': fill, 'width': 2})
+
+
+def _append_scripted_token_ops(ops, draw, token, x, y, line_height, normal_font, small_font, fill):
+    base_width, base_height = _measure_math_token(draw, token['base'], normal_font, small_font)
+    sup = token.get('sup')
+    sub = token.get('sub')
+
+    if _is_display_operator(token):
+        width, token_height = _measure_scripted_token(draw, token, normal_font, small_font)
+        start_y = y + max(0, (line_height - token_height) / 2)
+        cursor_y = start_y
+        if sup:
+            sup_width = draw.textlength(sup, font=small_font)
+            ops.append({'type': 'text', 'xy': (x + (width - sup_width) / 2, cursor_y), 'text': sup, 'font': small_font, 'fill': fill})
+            cursor_y += 18
+        base_x = x + (width - base_width) / 2
+        _append_math_token_ops(ops, draw, token['base'], base_x, cursor_y, base_height, normal_font, small_font, fill)
+        cursor_y += base_height - 2
+        if sub:
+            sub_width = draw.textlength(sub, font=small_font)
+            ops.append({'type': 'text', 'xy': (x + (width - sub_width) / 2, cursor_y), 'text': sub, 'font': small_font, 'fill': fill})
+        return
+
+    baseline_y = y + max(0, (line_height - (_line_height(normal_font) + 14)) / 2)
+    _append_math_token_ops(ops, draw, token['base'], x, baseline_y, base_height, normal_font, small_font, fill)
+    script_x = x + base_width + 3
+    if sup:
+        ops.append({'type': 'text', 'xy': (script_x, baseline_y - 11), 'text': sup, 'font': small_font, 'fill': fill})
+    if sub:
+        ops.append({'type': 'text', 'xy': (script_x, baseline_y + 15), 'text': sub, 'font': small_font, 'fill': fill})
+
+
+def _is_display_operator(token) -> bool:
+    base = token.get('base', {})
+    return not token.get('compact') and base.get('type') == 'text' and base.get('text') in ('∑', '∏', '∫')
+
+
+def _append_math_tokens(ops, draw, tokens, x, y, normal_font, small_font, fill):
+    cursor_x = x
+    baseline_y = y + 20
+    for token in tokens:
+        token_width, _ = _measure_math_token(draw, token, normal_font, small_font)
+        if token['type'] == 'frac':
+            _append_frac_ops(ops, draw, token, cursor_x, y, normal_font, small_font, fill)
+        else:
+            font = small_font if token['type'] in ('sup', 'sub') else normal_font
+            if token['type'] == 'sup':
+                token_y = baseline_y - 16
+            elif token['type'] == 'sub':
+                token_y = baseline_y + 7
+            else:
+                token_y = baseline_y
+            ops.append({'type': 'text', 'xy': (cursor_x, token_y), 'text': token['text'], 'font': font, 'fill': fill})
+            if token['type'] == 'overline':
+                ops.append({'type': 'line', 'xy': (cursor_x, token_y + 2, cursor_x + token_width, token_y + 2), 'fill': fill, 'width': 2})
+        cursor_x += token_width
+
+
+def _append_frac_ops(ops, draw, token, x, y, normal_font, small_font, fill):
+    width, _ = _measure_frac_token(draw, token, normal_font, small_font)
+    numerator_width, numerator_height = _measure_math_tokens(draw, token['numerator'], small_font, small_font)
+    denominator_width, _ = _measure_math_tokens(draw, token['denominator'], small_font, small_font)
+    numerator_x = x + (width - numerator_width) / 2
+    denominator_x = x + (width - denominator_width) / 2
+    line_y = y + numerator_height - 4
+    _append_wrapped_math_tokens(
+        ops,
+        draw,
+        token['numerator'],
+        numerator_x,
+        y - 10,
+        width,
+        small_font,
+        small_font,
+        fill,
+    )
+    ops.append({'type': 'line', 'xy': (x + 3, line_y, x + width - 3, line_y), 'fill': fill, 'width': 2})
+    _append_wrapped_math_tokens(
+        ops,
+        draw,
+        token['denominator'],
+        denominator_x,
+        line_y - 3,
+        width,
+        small_font,
+        small_font,
+        fill,
+    )
+
+
+def _compact_frac_text(token) -> str:
+    numerator = _tokens_to_plain_text(token['numerator'])
+    denominator = _tokens_to_plain_text(token['denominator'])
+    return f'{numerator}/{denominator}'
+
+
+def _tokens_to_plain_text(tokens) -> str:
+    parts = []
+    for token in tokens:
+        if token['type'] == 'frac':
+            parts.append(_compact_frac_text(token))
+        elif token['type'] == 'sup':
+            parts.append(f'^{token["text"]}')
+        elif token['type'] == 'sub':
+            parts.append(f'_{token["text"]}')
+        elif token['type'] == 'overline':
+            parts.append(f'{token["text"]}\u0304')
+        else:
+            parts.append(token['text'])
+    return ''.join(parts)
+
+
+_SUPERSCRIPT_MAP = str.maketrans({
+    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+    '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+    'A': 'ᴬ', 'B': 'ᴮ', 'D': 'ᴰ', 'E': 'ᴱ', 'G': 'ᴳ',
+    'H': 'ᴴ', 'I': 'ᴵ', 'J': 'ᴶ', 'K': 'ᴷ', 'L': 'ᴸ',
+    'M': 'ᴹ', 'N': 'ᴺ', 'O': 'ᴼ', 'P': 'ᴾ', 'R': 'ᴿ',
+    'Q': 'ᵠ', 'T': 'ᵀ', 'U': 'ᵁ', 'V': 'ⱽ', 'W': 'ᵂ',
+    'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ', 'd': 'ᵈ', 'e': 'ᵉ',
+    'f': 'ᶠ', 'g': 'ᵍ', 'h': 'ʰ', 'i': 'ⁱ', 'j': 'ʲ',
+    'k': 'ᵏ', 'l': 'ˡ', 'm': 'ᵐ', 'n': 'ⁿ', 'o': 'ᵒ',
+    'p': 'ᵖ', 'r': 'ʳ', 's': 'ˢ', 't': 'ᵗ', 'u': 'ᵘ',
+    'v': 'ᵛ', 'w': 'ʷ', 'x': 'ˣ', 'y': 'ʸ', 'z': 'ᶻ',
+})
+
+_SUBSCRIPT_MAP = str.maketrans({
+    '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+    '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+    '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎',
+    'a': 'ₐ', 'e': 'ₑ', 'h': 'ₕ', 'i': 'ᵢ', 'j': 'ⱼ',
+    'k': 'ₖ', 'l': 'ₗ', 'm': 'ₘ', 'n': 'ₙ', 'o': 'ₒ',
+    'p': 'ₚ', 'r': 'ᵣ', 's': 'ₛ', 't': 'ₜ', 'u': 'ᵤ',
+    'v': 'ᵥ', 'x': 'ₓ',
+})
+
+
+_LATEX_REPLACEMENTS = {
+    r'\alpha': 'α',
+    r'\beta': 'β',
+    r'\gamma': 'γ',
+    r'\delta': 'δ',
+    r'\epsilon': 'ε',
+    r'\theta': 'θ',
+    r'\lambda': 'λ',
+    r'\mu': 'μ',
+    r'\pi': 'π',
+    r'\sigma': 'σ',
+    r'\tau': 'τ',
+    r'\phi': 'φ',
+    r'\omega': 'ω',
+    r'\Gamma': 'Γ',
+    r'\Delta': 'Δ',
+    r'\Theta': 'Θ',
+    r'\Lambda': 'Λ',
+    r'\Pi': 'Π',
+    r'\Sigma': 'Σ',
+    r'\Phi': 'Φ',
+    r'\Omega': 'Ω',
+    r'\sum': '∑',
+    r'\prod': '∏',
+    r'\int': '∫',
+    r'\cdots': '⋯',
+    r'\ldots': '…',
+    r'\infty': '∞',
+    r'\leq': '≤',
+    r'\le': '≤',
+    r'\geq': '≥',
+    r'\ge': '≥',
+    r'\neq': '≠',
+    r'\approx': '≈',
+    r'\times': '×',
+    r'\cdot': '·',
+    r'\odot': '⊙',
+    r'\oplus': '⊕',
+    r'\to': '→',
+    r'\rightarrow': '→',
+    r'\left': '',
+    r'\right': '',
+    r'\exp': 'exp',
+    r'\log': 'log',
+    r'\sin': 'sin',
+    r'\cos': 'cos',
+    r'\tan': 'tan',
+    r'\max': 'max',
+    r'\min': 'min',
+}
+
+
 def _format_latex_text(text: str) -> str:
-    """将常见 LaTeX 公式转成图片导出里更易读的纯文本。"""
+    """将常见 LaTeX 公式转成图片导出里更易读的文本形式。"""
     text = text.strip()
     text = re.sub(r'^\${1,2}|\${1,2}$', '', text).strip()
+    text = re.sub(r'^\\\[|\\\]$', '', text).strip()
 
-    def replace_frac(match):
-        numerator = match.group(1).strip()
-        denominator = match.group(2).strip()
-        return f'({numerator}) / ({denominator})'
+    def replace_sqrt(match):
+        value = _format_latex_text(match.group(1).strip())
+        return f'√({value})'
 
-    text = re.sub(r'\\frac\{([^{}]+)\}\{([^{}]+)\}', replace_frac, text)
+    text = re.sub(r'\\(?:operatorname|mathrm|mathit|mathbf|boldsymbol|text)\{([^{}]+)\}', r'\1', text)
+    text = re.sub(r'\\mathbb\{E\}', 'E', text)
+    text = re.sub(r'\\mathbb\{V\}', 'Var', text)
+    text = re.sub(r'\\(?:bar|overline|widebar)\{([^{}]+)\}', lambda match: f'{_format_latex_text(match.group(1))}\u0304', text)
+    text = re.sub(r'\\sqrt\{([^{}]+)\}', replace_sqrt, text)
+    text = _replace_latex_frac(text)
 
-    replacements = {
-        r'\alpha': 'α',
-        r'\beta': 'β',
-        r'\gamma': 'γ',
-        r'\delta': 'δ',
-        r'\epsilon': 'ε',
-        r'\theta': 'θ',
-        r'\lambda': 'λ',
-        r'\mu': 'μ',
-        r'\pi': 'π',
-        r'\sigma': 'σ',
-        r'\tau': 'τ',
-        r'\phi': 'φ',
-        r'\omega': 'ω',
-        r'\Gamma': 'Γ',
-        r'\Delta': 'Δ',
-        r'\Theta': 'Θ',
-        r'\Lambda': 'Λ',
-        r'\Pi': 'Π',
-        r'\Sigma': 'Σ',
-        r'\Phi': 'Φ',
-        r'\Omega': 'Ω',
-        r'\sum': '∑',
-        r'\prod': '∏',
-        r'\int': '∫',
-        r'\infty': '∞',
-        r'\leq': '≤',
-        r'\le': '≤',
-        r'\geq': '≥',
-        r'\ge': '≥',
-        r'\neq': '≠',
-        r'\approx': '≈',
-        r'\times': '×',
-        r'\cdot': '·',
-        r'\to': '→',
-        r'\rightarrow': '→',
-        r'\left': '',
-        r'\right': '',
-        r'\exp': 'exp',
-        r'\log': 'log',
-    }
-    for source, target in replacements.items():
+    for source, target in sorted(_LATEX_REPLACEMENTS.items(), key=lambda item: len(item[0]), reverse=True):
         text = text.replace(source, target)
 
-    text = re.sub(r'_\{([^{}]+)\}', r'_(\1)', text)
-    text = re.sub(r'\^\{([^{}]+)\}', r'^\1', text)
-    text = re.sub(r'\\([A-Za-z]+)', r'\1', text)
+    text = _replace_latex_scripts(text)
+    def strip_unknown_command(match):
+        return match.group(1)
+
+    text = re.sub(r'\\([A-Za-z]+)', strip_unknown_command, text)
     text = text.replace(r'\{', '{').replace(r'\}', '}')
     text = text.replace('{', '').replace('}', '')
     return text.strip()
+
+
+def _replace_latex_scripts(text: str) -> str:
+    result = []
+    index = 0
+    while index < len(text):
+        marker = text[index]
+        if marker not in ('^', '_') or index + 1 >= len(text):
+            result.append(marker)
+            index += 1
+            continue
+
+        value_start = index + 1
+        if text[value_start] == '{':
+            group = _read_latex_group(text, value_start)
+            if group is None:
+                result.append(marker)
+                index += 1
+                continue
+            raw_value, next_index = group
+        else:
+            raw_value = text[value_start]
+            next_index = value_start + 1
+
+        value = _format_latex_text(raw_value)
+        result.append(_translate_script(value, marker))
+        index = next_index
+    return ''.join(result)
+
+
+def _format_latex_tokens(text: str) -> list[dict[str, str]]:
+    text = _format_latex_without_scripts(text, keep_overline=True)
+    tokens = []
+    index = 0
+    while index < len(text):
+        overline_match = re.match(r'\\(?:bar|overline|widebar)\{([^{}]+)\}', text[index:])
+        if overline_match:
+            tokens.append({'type': 'overline', 'text': _format_latex_text(overline_match.group(1))})
+            index += len(overline_match.group(0))
+            continue
+
+        marker = text[index]
+        if marker not in ('^', '_') or index + 1 >= len(text):
+            start = index
+            while (
+                index < len(text)
+                and not (text[index] in ('^', '_') and index + 1 < len(text))
+                and not re.match(r'\\(?:bar|overline|widebar)\{', text[index:])
+            ):
+                index += 1
+            value = text[start:index]
+            if value:
+                tokens.append({'type': 'text', 'text': value})
+            continue
+
+        value_start = index + 1
+        if text[value_start] == '{':
+            group = _read_latex_group(text, value_start)
+            if group is None:
+                tokens.append({'type': 'text', 'text': marker})
+                index += 1
+                continue
+            raw_value, next_index = group
+        else:
+            raw_value = text[value_start]
+            next_index = value_start + 1
+        tokens.append({'type': 'sup' if marker == '^' else 'sub', 'text': _format_latex_text(raw_value)})
+        index = next_index
+    return _merge_script_tokens(tokens)
+
+
+def _merge_script_tokens(tokens: list[dict[str, str]]) -> list[dict[str, str]]:
+    merged = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token['type'] in ('sup', 'sub') or index + 1 >= len(tokens):
+            merged.append(token)
+            index += 1
+            continue
+
+        next_token = tokens[index + 1]
+        if next_token['type'] not in ('sup', 'sub'):
+            merged.append(token)
+            index += 1
+            continue
+
+        prefix, base = _split_script_base(token)
+        if prefix:
+            merged.append(prefix)
+            token = base
+
+        scripted = {'type': 'scripted', 'base': token}
+        while index + 1 < len(tokens) and tokens[index + 1]['type'] in ('sup', 'sub'):
+            script = tokens[index + 1]
+            scripted[script['type']] = script['text']
+            index += 1
+        merged.append(scripted)
+        index += 1
+    return merged
+
+
+def _split_script_base(token: dict) -> tuple[dict | None, dict]:
+    if token['type'] != 'text':
+        return None, token
+    text = token.get('text', '')
+    if len(text) <= 1:
+        return None, token
+    base_text = text[-1]
+    if not (base_text.isalnum() or base_text in ('∑', '∏', '∫', ')', ']')):
+        return None, token
+    return {'type': 'text', 'text': text[:-1]}, {'type': 'text', 'text': base_text}
+
+
+def _translate_script(value: str, marker: str) -> str:
+    table = _SUPERSCRIPT_MAP if marker == '^' else _SUBSCRIPT_MAP
+    translated = value.translate(table)
+    if translated != value and all(char in table or char.isspace() for char in value):
+        return translated
+    if len(value) == 1 and translated != value:
+        return translated
+    return f'{marker}({value})'
+
+
+def _format_latex_without_scripts(text: str, keep_overline: bool = False, keep_frac: bool = False) -> str:
+    text = text.strip()
+    text = re.sub(r'^\${1,2}|\${1,2}$', '', text).strip()
+    text = re.sub(r'^\\\[|\\\]$', '', text).strip()
+    text = re.sub(r'\\mathbb\{E\}', 'E', text)
+    text = re.sub(r'\\mathbb\{V\}', 'Var', text)
+    text = re.sub(r'\\(?:operatorname|mathrm|mathit|mathbf|boldsymbol|text)\{([^{}]+)\}', r'\1', text)
+    if not keep_overline:
+        text = re.sub(r'\\(?:bar|overline|widebar)\{([^{}]+)\}', lambda match: f'{_format_latex_text(match.group(1))}\u0304', text)
+    text = re.sub(
+        r'\\sqrt\{([^{}]+)\}',
+        lambda match: f'√({_format_latex_without_scripts(match.group(1), keep_overline=keep_overline, keep_frac=keep_frac)})',
+        text,
+    )
+    if not keep_frac:
+        text = _replace_latex_frac(text, keep_overline=keep_overline)
+    for source, target in sorted(_LATEX_REPLACEMENTS.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(source, target)
+    def strip_unknown_command(match):
+        command = match.group(1)
+        if keep_overline and command in ('bar', 'overline', 'widebar'):
+            return f'\\{command}'
+        if keep_frac and command == 'frac':
+            return f'\\{command}'
+        return command
+
+    text = re.sub(r'\\([A-Za-z]+)', strip_unknown_command, text)
+    text = text.replace(r'\{', '{').replace(r'\}', '}')
+    return text.strip()
+
+
+def _replace_latex_frac(text: str, keep_overline: bool = False) -> str:
+    while '\\frac{' in text:
+        start = text.find('\\frac{')
+        numerator_start = start + len('\\frac')
+        numerator = _read_latex_group(text, numerator_start)
+        if numerator is None:
+            break
+        denominator = _read_latex_group(text, numerator[1])
+        if denominator is None:
+            break
+        numerator_text = _format_latex_without_scripts(numerator[0], keep_overline=keep_overline)
+        denominator_text = _format_latex_without_scripts(denominator[0], keep_overline=keep_overline)
+        replacement = (
+            f'{_maybe_wrap_fraction_part(numerator_text)}'
+            f'/{_maybe_wrap_fraction_part(denominator_text)}'
+        )
+        text = text[:start] + replacement + text[denominator[1]:]
+    return text
+
+
+def _maybe_wrap_fraction_part(text: str) -> str:
+    text = text.strip()
+    if re.match(r'^[A-Za-z0-9]+(?:[_^][A-Za-z0-9]+)?$', text):
+        return text
+    if re.match(r'^[A-Za-z0-9]+(?:_\{[^{}]+\}|\^\{[^{}]+\})?$', text):
+        return text
+    return f'({text})'
+
+
+def _read_latex_group(text: str, start: int):
+    if start >= len(text) or text[start] != '{':
+        return None
+    depth = 0
+    for index in range(start, len(text)):
+        char = text[index]
+        if char == '{':
+            depth += 1
+        elif char == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start + 1:index], index + 1
+    return None
 
 
 def _wrap_text(draw, text: str, font, max_width: int, preserve_spaces: bool = False) -> list[str]:
