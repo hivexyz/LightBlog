@@ -10,7 +10,9 @@ from app.models import User, Setting
 from app.auth import hash_password
 from app.routes.main import router as main_router
 from app.routes.admin import router as admin_router
+from app.routes.ai_writing import router as ai_writing_router
 from app.view_counter import view_counter
+from app.services.ai_job_worker import ai_job_worker
 
 
 def init_default_data():
@@ -51,8 +53,10 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
     # 初始化默认数据（幂等）
     init_default_data()
+    ai_job_worker.start()
     yield
     # 关闭时：刷入浏览量
+    ai_job_worker.stop()
     view_counter.flush()
 
 
@@ -69,6 +73,7 @@ app.state.templates = templates
 # 路由
 app.include_router(main_router)
 app.include_router(admin_router)
+app.include_router(ai_writing_router)
 
 
 @app.exception_handler(404)

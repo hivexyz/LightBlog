@@ -498,7 +498,7 @@ workers = 2
 worker_class = "uvicorn.workers.UvicornWorker"
 max_requests = 1000
 max_requests_jitter = 50
-timeout = 30
+timeout = 240  # AI 长文生成接口需要更长窗口；应用内部仍有 180 秒模型超时
 ```
 
 ### 9.4 HTTPS 配置

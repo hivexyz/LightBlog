@@ -20,10 +20,10 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
   BlockAssembler,
   createUserMessage,
-  deepFreeze,
   type GenerateOptions,
   type Message,
 } from '@deepseek-ai/dsh-llm'
+import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'

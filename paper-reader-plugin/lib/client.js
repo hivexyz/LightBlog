@@ -1,3 +1,4 @@
+window.__ModuleLoader__.load({ id: "dsh-paper-reader", factory: (require) => { var module = { exports: {} }; var exports = module.exports;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -781,3 +782,4 @@ function formatSize(bytes) {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + "" + sizes[i];
 }
+return module.exports; } });

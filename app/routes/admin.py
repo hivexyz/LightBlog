@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Resp
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, Post, Category, Tag, Setting
+from app.models import AIWritingSession, User, Post, Category, Tag, Setting
 from app.config import settings
 from app.auth import (
     hash_password, verify_password, create_session,
@@ -172,6 +172,11 @@ def new_post_page(request: Request, db: Session = Depends(get_db), user: User = 
         'categories': categories,
         'tags': tags,
         'csrf_token': make_csrf(request),
+        'ai_text_enabled': settings.AI_TEXT_ENABLED,
+        'ai_image_enabled': settings.AI_IMAGE_ENABLED,
+        'web_search_enabled': settings.WEB_SEARCH_ENABLED,
+        'ai_max_inline_images': settings.AI_MAX_INLINE_IMAGES,
+        'ai_session_id': None,
     })
 
 
@@ -201,6 +206,7 @@ def create_post(
     tag_ids: list[int] = Form(None),
     status: int = Form(1),
     cover_image: str = Form(''),
+    ai_session_id: int = Form(None),
     csrf_token: str = Form(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_admin)
@@ -227,6 +233,15 @@ def create_post(
         post.tags = db.query(Tag).filter(Tag.id.in_(tag_ids)).all()
 
     db.add(post)
+    db.flush()
+    if ai_session_id:
+        writing_session = db.query(AIWritingSession).filter(
+            AIWritingSession.id == ai_session_id,
+            AIWritingSession.author_id == user.id,
+            AIWritingSession.post_id.is_(None),
+        ).first()
+        if writing_session:
+            writing_session.post_id = post.id
     db.commit()
     return RedirectResponse(url='/admin/posts', status_code=302)
 
@@ -238,6 +253,10 @@ def edit_post_page(request: Request, post_id: int, db: Session = Depends(get_db)
         raise HTTPException(status_code=404)
     categories = db.query(Category).all()
     tags = db.query(Tag).all()
+    writing_session = db.query(AIWritingSession).filter(
+        AIWritingSession.post_id == post.id,
+        AIWritingSession.author_id == user.id,
+    ).order_by(AIWritingSession.updated_at.desc()).first()
     return request.app.state.templates.TemplateResponse('admin/post_form.html', {
         'request': request,
         'user': user,
@@ -245,6 +264,11 @@ def edit_post_page(request: Request, post_id: int, db: Session = Depends(get_db)
         'categories': categories,
         'tags': tags,
         'csrf_token': make_csrf(request),
+        'ai_text_enabled': settings.AI_TEXT_ENABLED,
+        'ai_image_enabled': settings.AI_IMAGE_ENABLED,
+        'web_search_enabled': settings.WEB_SEARCH_ENABLED,
+        'ai_max_inline_images': settings.AI_MAX_INLINE_IMAGES,
+        'ai_session_id': writing_session.id if writing_session else None,
     })
 
 
@@ -333,6 +357,7 @@ def update_post(
     tag_ids: list[int] = Form(None),
     status: int = Form(1),
     cover_image: str = Form(''),
+    ai_session_id: int = Form(None),
     csrf_token: str = Form(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_admin)
@@ -358,6 +383,14 @@ def update_post(
         post.tags = db.query(Tag).filter(Tag.id.in_(tag_ids)).all()
     else:
         post.tags = []
+
+    if ai_session_id:
+        writing_session = db.query(AIWritingSession).filter(
+            AIWritingSession.id == ai_session_id,
+            AIWritingSession.author_id == user.id,
+        ).first()
+        if writing_session and writing_session.post_id in (None, post.id):
+            writing_session.post_id = post.id
 
     db.commit()
     return RedirectResponse(url='/admin/posts', status_code=302)

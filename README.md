@@ -8,6 +8,8 @@
 - Markdown 写作：支持代码块、表格、引用和基础排版。
 - 数学公式：支持行内 `$E=mc^2$` 和块级 `$$...$$`，前台按需加载 KaTeX。
 - 图片上传：后台支持头像、文章封面、正文图片从本地上传。
+- AI 共创：根据主题和核心观点生成初稿，通过采访补充作者观点，生成带封面和正文插画的最终草稿。
+- 按需研究：主动规划和执行网络搜索，选择可信资料后生成带可追溯引用的文章。
 - 长图导出：后台可选择模板，按 Markdown 一级/二级标题拆分文章并导出 PNG 长图 ZIP。
 - 封面展示：首页文章卡片右侧显示封面缩略图，文章详情页不重复展示封面大图。
 - 安全：bleach XSS 清洗、CSRF 防护、登录失败限流。
@@ -78,8 +80,73 @@ python -m app.cli init-db
 | COOKIE_SECURE | false | Cookie Secure（HTTPS 环境设为 true） |
 | POSTS_PER_PAGE | 10 | 每页文章数 |
 | UPLOAD_DIR | ./uploads | 上传图片目录 |
+| AI_API_BASE | https://api.openai.com/v1 | OpenAI-compatible API 根地址 |
+| AI_API_KEY | 空 | 模型服务密钥；为空时 AI 功能禁用 |
+| AI_TEXT_MODEL | 空 | 文本模型名；与 API Key 同时配置后启用共创 |
+| AI_IMAGE_MODEL | 空 | 图片模型名；为空时仍可生成文字，但不能生成配图 |
+| AI_REQUEST_TIMEOUT | 180 | 单次文本模型调用超时秒数；最终文章与配图规划已拆成两个请求 |
+| AI_MAX_CONTEXT_CHARS | 50000 | 单次发送给模型的文章上下文字符上限 |
+| AI_MAX_INLINE_IMAGES | 2 | 每篇文章最多规划的正文配图数（不含封面） |
+| AI_FINAL_MAX_TOKENS | 4800 | 最终文章生成的最大输出 token |
+| AI_IMAGE_PLAN_MAX_TOKENS | 1800 | 配图规划的最大输出 token |
+| AI_HUMANIZE_MAX_TOKENS | 4800 | “去除 AI 腔”编辑的最大输出 token |
+| AI_JOB_WORKER_ENABLED | true | 是否启动 SQLite 后台写作任务 worker |
+| AI_JOB_POLL_INTERVAL | 1 | worker 查询待执行任务的间隔秒数 |
+| AI_JOB_STALE_SECONDS | 600 | 运行中任务超过该时间未更新时允许恢复 |
+| AI_JOB_MAX_ATTEMPTS | 2 | 中断任务的最大领取次数 |
+| AI_WRITING_STYLE | 内置技术写作规范 | 自定义博客写作风格提示词 |
+| WEB_SEARCH_PROVIDER | 空 | 必须显式设置为 `tavily` 或 `tavily_hub`；不使用模型原生搜索 |
+| WEB_SEARCH_API_BASE | 空 | 搜索 API 根地址，必须显式配置 |
+| WEB_SEARCH_API_KEY | 空 | 搜索服务密钥，必须显式配置 |
+| WEB_SEARCH_MAX_QUERIES | 3 | 每次 AI 最多规划的检索词数量 |
+| WEB_SEARCH_MAX_RESULTS | 5 | 单次搜索最多保留的结果数 |
+| WEB_SEARCH_TIMEOUT | 30 | 搜索请求超时秒数 |
 
 注意：`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只在数据库里不存在该管理员时用于首次创建。数据库已经初始化后，单独修改环境变量不会改变现有密码。
+
+### 配置 AI 共创
+
+AI 共创使用 OpenAI-compatible 的 `/chat/completions` 和 `/images/generations` 接口，模型运行在外部服务，不占用博客服务器的推理内存。在项目根目录创建不入库的 `.env`：
+
+```dotenv
+AI_API_BASE=https://api.openai.com/v1
+AI_API_KEY=your-api-key
+AI_TEXT_MODEL=your-text-model
+AI_IMAGE_MODEL=your-image-model
+WEB_SEARCH_PROVIDER=tavily_hub
+WEB_SEARCH_API_BASE=https://tavily.sharyuke.com/api/proxy
+WEB_SEARCH_API_KEY=your-hub-key
+```
+
+使用标准 Tavily 时改为：
+
+```dotenv
+WEB_SEARCH_PROVIDER=tavily
+WEB_SEARCH_API_BASE=https://api.tavily.com
+WEB_SEARCH_API_KEY=your-tavily-key
+```
+
+未完整配置这三个变量时，写作功能保持可用；点击“搜索资料”或“核实选中文字”会弹窗提示网络搜索未配置。
+
+重新构建并启动容器：
+
+```bash
+docker compose up -d --build
+```
+
+进入“后台 -> 新建文章”即可看到 AI 共创手记。使用顺序为：
+
+1. 输入主题和核心观点，选择“个人判断、技术教程、问题复盘、观点辩论或研究笔记”，并可补充作者口吻。
+2. 可选：规划检索词、主动搜索，并勾选要使用的资料。普通对话不会自动搜索。
+3. 生成初稿，让 AI 提问，并在对话框回答或提出修改要求。
+4. 检查并编辑“已确认写作要点”。
+5. 提交最终稿后台任务。页面会显示队列、文章生成和配图规划进度，刷新后可继续恢复。
+6. 可执行“去除 AI 腔”，查看前后版本并随时恢复润色前内容。
+7. 将最终稿应用到编辑器。系统会自动切换为草稿，仍需点击“保存”才会写入文章。
+
+AI 会话、问答、研究来源与配图状态保存在 SQLite；生成图片经 Pillow 校验后压缩为 WebP，保存在现有 `uploads/YYYY/MM/` 目录。只有被勾选的网络资料会进入写作上下文，模型生成的外部链接还会经过来源白名单校验。API Key 只在服务器端读取，不会返回浏览器。详细设计见 [AI 共创 MVP](docs/ai-writing-mvp.md)。
+
+最终稿生成使用 SQLite 持久化任务队列，不依赖浏览器请求持续连接。后台先生成文章并在约 70% 进度时落库，再规划配图；进程中断后会从已保存文章继续，不重复生成正文。多 Gunicorn worker 通过条件更新原子领取任务，不需要 Redis 或 Celery。
 
 ## 后台使用
 
@@ -163,7 +230,7 @@ docker compose restart web
 # gunicorn.conf.py
 workers = 2
 worker_class = "uvicorn.workers.UvicornWorker"
-timeout = 30
+timeout = 240
 keepalive = 5
 max_requests = 1000
 max_requests_jitter = 50

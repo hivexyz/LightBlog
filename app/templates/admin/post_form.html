@@ -8,64 +8,312 @@
 {% endblock %}
 
 {% block content %}
-<h1>{{ '编辑文章' if post else '新建文章' }}</h1>
-
-<form method="post" action="{{ '/admin/post/' ~ post.id ~ '/edit' if post else '/admin/post/new' }}">
+<div class="post-editor-page">
+<form class="post-editor-form" method="post" action="{{ '/admin/post/' ~ post.id ~ '/edit' if post else '/admin/post/new' }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" id="ai-session-id" name="ai_session_id" value="{{ ai_session_id or '' }}">
 
-    <div class="form-group">
-        <label>标题</label>
-        <input type="text" name="title" value="{{ post.title if post else '' }}" required>
-    </div>
-
-    <div class="form-row">
-        <div class="form-group">
-            <label>分类</label>
-            <select name="category_id">
-                <option value="">无分类</option>
-                {% for cat in categories %}
-                <option value="{{ cat.id }}" {% if post and post.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
-                {% endfor %}
-            </select>
+    <header class="post-editor-header">
+        <div>
+            <p class="post-editor-context">内容工作台</p>
+            <h1>{{ '编辑文章' if post else '写一篇新文章' }}</h1>
+            <p class="post-editor-description">先整理判断和证据，再把它写成一篇真正属于你的文章。</p>
         </div>
-        <div class="form-group">
-            <label>状态</label>
-            <select name="status">
-                <option value="1" {% if not post or post.status == 1 %}selected{% endif %}>已发布</option>
-                <option value="0" {% if post and post.status == 0 %}selected{% endif %}>草稿</option>
-            </select>
+        <div class="post-editor-header-actions">
+            <a href="/admin/posts" class="btn">返回文章列表</a>
+            <button type="submit" class="btn btn-primary">保存文章</button>
         </div>
-    </div>
+    </header>
 
-    <div class="form-group">
-        <label>标签</label>
-        <div class="tag-checkboxes">
-            {% for tag in tags %}
-            <label class="tag-checkbox">
-                <input type="checkbox" name="tag_ids" value="{{ tag.id }}"
-                    {% if post and tag in post.tags %}checked{% endif %}>
-                {{ tag.name }}
-            </label>
-            {% endfor %}
+    <section class="post-document-card" aria-labelledby="post-document-heading">
+        <h2 id="post-document-heading" class="visually-hidden">文章信息</h2>
+        <div class="post-title-field">
+            <label for="post-title-input">文章标题</label>
+            <input type="text" id="post-title-input" name="title" value="{{ post.title if post else '' }}" placeholder="写下一个清晰、具体的标题" required>
         </div>
-    </div>
 
-    <div class="form-group">
-        <label>封面图 URL</label>
-        <div class="upload-row">
-            <input type="text" id="cover-image-input" name="cover_image" value="{{ post.cover_image if post else '' }}" placeholder="可选">
-            <label class="btn upload-btn">
-                上传封面
-                <input type="file" id="cover-image-file" accept="image/*">
-            </label>
+        <div class="post-meta-grid">
+            <div class="form-group">
+                <label for="post-category-input">分类</label>
+                <select id="post-category-input" name="category_id">
+                    <option value="">无分类</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if post and post.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="post-status-input">发布状态</label>
+                <select id="post-status-input" name="status">
+                    <option value="1" {% if not post or post.status == 1 %}selected{% endif %}>已发布</option>
+                    <option value="0" {% if post and post.status == 0 %}selected{% endif %}>草稿</option>
+                </select>
+            </div>
+            <div class="form-group post-tags-field">
+                <label>标签</label>
+                <div class="tag-checkboxes">
+                    {% for tag in tags %}
+                    <label class="tag-checkbox">
+                        <input type="checkbox" name="tag_ids" value="{{ tag.id }}"
+                            {% if post and tag in post.tags %}checked{% endif %}>
+                        <span>{{ tag.name }}</span>
+                    </label>
+                    {% else %}
+                    <span class="post-empty-hint">还没有标签，可在标签管理中创建。</span>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
-        <div class="upload-hint">支持 jpg、jpeg、png、gif、webp，最大 5MB。</div>
-        <img id="cover-image-preview" class="cover-preview" src="{{ post.cover_image if post and post.cover_image else '' }}" alt="封面预览">
-    </div>
 
-    <div class="form-group">
-        <div class="field-header">
-            <label>内容（Markdown）</label>
+        <details class="post-cover-settings">
+            <summary>封面与图片设置</summary>
+            <div class="post-cover-content">
+                <div class="form-group">
+                    <label for="cover-image-input">封面图 URL</label>
+                    <div class="upload-row">
+                        <input type="text" id="cover-image-input" name="cover_image" value="{{ post.cover_image if post else '' }}" placeholder="可选，可粘贴 URL 或上传本地图片">
+                        <label class="btn upload-btn">
+                            上传封面
+                            <input type="file" id="cover-image-file" accept="image/*">
+                        </label>
+                    </div>
+                    <div class="upload-hint">支持 jpg、jpeg、png、gif、webp，最大 5MB。</div>
+                </div>
+                <img id="cover-image-preview" class="cover-preview" src="{{ post.cover_image if post and post.cover_image else '' }}" alt="封面预览">
+            </div>
+        </details>
+    </section>
+
+    <section
+        id="ai-writing-studio"
+        class="ai-studio"
+        data-post-id="{{ post.id if post else '' }}"
+        data-session-id="{{ ai_session_id or '' }}"
+        data-text-enabled="{{ 'true' if ai_text_enabled else 'false' }}"
+        data-image-enabled="{{ 'true' if ai_image_enabled else 'false' }}"
+        data-web-search-enabled="{{ 'true' if web_search_enabled else 'false' }}"
+        data-max-inline-images="{{ ai_max_inline_images }}"
+    >
+        <header class="ai-studio-header">
+            <div class="ai-studio-heading">
+                <span class="ai-studio-mark" aria-hidden="true">✦</span>
+                <div>
+                    <h2>AI 共创手记</h2>
+                    <p>从观点到证据，再到采访与成稿，按四个阶段完成一篇文章。</p>
+                </div>
+            </div>
+            <span id="ai-session-status" class="ai-status" data-state="idle">尚未开始</span>
+        </header>
+
+        {% if not ai_text_enabled %}
+        <div class="ai-config-notice" role="status">
+            文本生成功能尚未配置。请在服务器环境变量中设置 AI_API_KEY 和 AI_TEXT_MODEL。
+        </div>
+        {% endif %}
+
+        <div id="ai-error" class="ai-error" role="alert" hidden></div>
+
+        <div class="ai-workflow">
+            <details class="ai-stage ai-stage-brief" data-ai-stage="brief" open>
+                <summary class="ai-stage-summary">
+                    <span class="ai-stage-number" aria-hidden="true">1</span>
+                    <span class="ai-stage-heading">
+                        <strong>写作起点</strong>
+                        <small>输入主题和核心观点，先形成一版可讨论的初稿。</small>
+                    </span>
+                </summary>
+                <div class="ai-stage-body ai-brief-pane">
+                    <div class="form-group">
+                        <label for="ai-topic">主题</label>
+                        <input id="ai-topic" type="text" maxlength="500" placeholder="例如：RAG 的第一性问题">
+                    </div>
+                    <div class="form-group">
+                        <label for="ai-core-points">核心观点</label>
+                        <textarea id="ai-core-points" rows="5" maxlength="12000" placeholder="写下必须保留的判断、案例或反例。越具体，初稿越像你。"></textarea>
+                    </div>
+                    <div class="ai-compact-fields">
+                        <div class="form-group">
+                            <label for="ai-audience">目标读者</label>
+                            <input id="ai-audience" type="text" maxlength="300" value="技术读者">
+                        </div>
+                        <div class="form-group">
+                            <label for="ai-length">期望篇幅</label>
+                            <select id="ai-length">
+                                <option value="短文，约 1000-1500 字">短文</option>
+                                <option value="中等，约 2000-3000 字" selected>中等</option>
+                                <option value="长文，约 4000-6000 字">长文</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="ai-style-fields">
+                        <div class="form-group">
+                            <label for="ai-writing-mode">文章表达方式</label>
+                            <select id="ai-writing-mode">
+                                <option value="personal_opinion">个人判断</option>
+                                <option value="technical_tutorial">技术教程</option>
+                                <option value="problem_review">问题复盘</option>
+                                <option value="debate">观点辩论</option>
+                                <option value="research_notes">研究笔记</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ai-style-notes">作者口吻</label>
+                            <textarea id="ai-style-notes" rows="3" maxlength="3000" placeholder="例如：像和同行复盘，不说套话；先讲直觉，再给公式；结尾不要重复全文。"></textarea>
+                        </div>
+                    </div>
+                    <div class="ai-stage-actions">
+                        <button id="ai-generate-draft" type="button" class="btn ai-action-primary" {% if not ai_text_enabled %}disabled{% endif %}>
+                            生成初稿
+                        </button>
+                        <p class="ai-helper">编辑器已有内容时，会将它作为作者素材一并整理。</p>
+                    </div>
+                </div>
+            </details>
+
+            <details class="ai-stage ai-stage-research" data-ai-stage="research">
+                <summary class="ai-stage-summary">
+                    <span class="ai-stage-number" aria-hidden="true">2</span>
+                    <span class="ai-stage-heading">
+                        <strong>资料搜索</strong>
+                        <small>手动核实观点并筛选来源；普通问答不会自动搜索。</small>
+                    </span>
+                    <span id="ai-source-count" class="ai-stage-meta">已选 0 条</span>
+                </summary>
+                <div class="ai-stage-body ai-research-pane" aria-labelledby="ai-research-title">
+                    <div class="ai-research-heading">
+                        <div>
+                            <h3 id="ai-research-title">查找可以支持或修正观点的资料</h3>
+                            <p>搜索会结合主题、核心观点和当前问题；只有勾选的资料才会进入后续回答。</p>
+                        </div>
+                        <button id="ai-reanswer" type="button" class="btn btn-sm" disabled>用已选资料重新回答</button>
+                    </div>
+                    {% if not web_search_enabled %}
+                    <div class="ai-config-notice ai-research-notice" role="status">
+                        网络搜索尚未配置。请设置 WEB_SEARCH_PROVIDER、WEB_SEARCH_API_BASE 和 WEB_SEARCH_API_KEY；点击搜索时会再次提示。
+                    </div>
+                    {% endif %}
+                    <div class="ai-research-toolbar">
+                        <input id="ai-research-query" type="text" maxlength="1000" placeholder="输入要核实的问题；留空时使用最近一轮问答">
+                        <button id="ai-plan-research" type="button" class="btn">规划搜索</button>
+                        <button id="ai-verify-selection" type="button" class="btn">核实选中内容</button>
+                        <button id="ai-search" type="button" class="btn ai-action-secondary">搜索资料</button>
+                    </div>
+                    <div id="ai-research-queries" class="ai-research-queries" hidden></div>
+                    <div id="ai-research-sources" class="ai-research-sources">
+                        <div class="ai-empty-state">还没有搜索资料。可以跳过这一步，直接继续采访。</div>
+                    </div>
+                </div>
+            </details>
+
+            <details class="ai-stage ai-stage-interview" data-ai-stage="interview">
+                <summary class="ai-stage-summary">
+                    <span class="ai-stage-number" aria-hidden="true">3</span>
+                    <span class="ai-stage-heading">
+                        <strong>采访与确认</strong>
+                        <small>通过问答补充你的经验、分歧、反例和适用边界。</small>
+                    </span>
+                </summary>
+                <div class="ai-stage-body ai-interview-pane">
+                    <div id="ai-messages" class="ai-messages" aria-live="polite">
+                        <div class="ai-empty-state">生成初稿后，AI 会围绕经历、证据、反例和边界向你提问。</div>
+                    </div>
+                    <div class="form-group ai-message-compose">
+                        <label for="ai-user-message">回答、追问或提出修改要求</label>
+                        <textarea id="ai-user-message" rows="3" maxlength="6000" placeholder="例如：这个判断来自我做知识库项目时的一次失败……"></textarea>
+                    </div>
+                    <div class="ai-inline-actions">
+                        <button id="ai-ask" type="button" class="btn" disabled>让 AI 提问</button>
+                        <button id="ai-send" type="button" class="btn ai-action-secondary" disabled>发送给 AI</button>
+                    </div>
+                    <div class="form-group ai-confirmed-brief">
+                        <label for="ai-confirmed-brief">已确认写作要点</label>
+                        <textarea id="ai-confirmed-brief" rows="6" maxlength="12000" placeholder="AI 会把你确认的信息整理在这里；最终生成前可以直接修改。"></textarea>
+                    </div>
+                </div>
+            </details>
+
+            <details class="ai-stage ai-stage-final" data-ai-stage="final">
+                <summary class="ai-stage-summary">
+                    <span class="ai-stage-number" aria-hidden="true">4</span>
+                    <span class="ai-stage-heading">
+                        <strong>生成最终稿</strong>
+                        <small>综合初稿、已选资料和确认要点，生成最终候选版本。</small>
+                    </span>
+                </summary>
+                <div class="ai-stage-body ai-final-stage-body">
+                    <div class="ai-finalize-bar">
+                        <div class="ai-finalize-options">
+                            <label class="ai-check-option">
+                                <input id="ai-include-cover" type="checkbox" checked>
+                                生成封面
+                            </label>
+                            <label>
+                                正文配图
+                                <select id="ai-inline-image-count">
+                                    {% for count in range(ai_max_inline_images + 1) %}
+                                    <option value="{{ count }}" {% if count == ai_max_inline_images %}selected{% endif %}>{{ count }} 张</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label>
+                                图片风格
+                                <select id="ai-image-style">
+                                    <option value="克制的现代科技插画，冷静、清晰、留白充足">现代科技插画</option>
+                                    <option value="极简几何抽象，有限色彩，大面积留白">极简抽象</option>
+                                    <option value="细腻手绘 editorial illustration，自然纸张质感">编辑手绘</option>
+                                    <option value="真实摄影风格，自然光，纪实构图">写实摄影</option>
+                                </select>
+                            </label>
+                        </div>
+                        <button id="ai-finalize" type="button" class="btn ai-finalize-button" disabled>生成最终稿与配图计划</button>
+                    </div>
+
+                    <div id="ai-final-result" class="ai-final-result" hidden>
+                        <div class="ai-final-heading">
+                            <div>
+                                <h3>最终候选稿</h3>
+                                <p>逐张确认配图后，再应用到编辑器。尚未生成的图片不会留下占位符。</p>
+                            </div>
+                            <div class="ai-inline-actions">
+                                <button id="ai-humanize" type="button" class="btn" disabled>去除 AI 腔</button>
+                                <button id="ai-restore-humanize" type="button" class="btn" disabled>恢复润色前版本</button>
+                                <button id="ai-replan-images" type="button" class="btn" disabled>重新规划配图</button>
+                                <button id="ai-generate-all-images" type="button" class="btn" disabled>生成全部配图</button>
+                                <button id="ai-apply-final" type="button" class="btn ai-action-primary">应用到编辑器</button>
+                            </div>
+                        </div>
+                        <details class="ai-final-preview">
+                            <summary>查看最终稿 Markdown</summary>
+                            <pre id="ai-final-content"></pre>
+                        </details>
+                        <details id="ai-humanize-diff" class="ai-humanize-diff" hidden>
+                            <summary>查看去 AI 腔前后对比</summary>
+                            <p id="ai-humanize-summary" class="ai-humanize-summary"></p>
+                            <div class="ai-humanize-columns">
+                                <div>
+                                    <strong>润色前</strong>
+                                    <pre id="ai-humanize-before"></pre>
+                                </div>
+                                <div>
+                                    <strong>润色后</strong>
+                                    <pre id="ai-humanize-after"></pre>
+                                </div>
+                            </div>
+                        </details>
+                        <div id="ai-citation-warning" class="ai-citation-warning" hidden></div>
+                        <div id="ai-image-list" class="ai-image-list"></div>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </section>
+
+    <section class="editor-workspace-card" aria-labelledby="editor-workspace-title">
+        <div class="editor-workspace-header">
+            <div>
+                <h2 id="editor-workspace-title">文章正文</h2>
+                <p>左侧写作，右侧实时检查最终呈现。</p>
+            </div>
             <label class="btn btn-sm upload-btn">
                 上传正文图片
                 <input type="file" id="content-image-file" accept="image/*">
@@ -80,22 +328,30 @@
                 <div id="content-preview" class="post-content editor-preview-content"></div>
             </div>
         </div>
-    </div>
+    </section>
 
-    <button type="submit" class="btn btn-primary">保存</button>
-    <a href="/admin/posts" class="btn">取消</a>
+    <div class="post-save-bar">
+        <p>AI 生成内容只会应用到编辑器，点击保存后才会写入文章。</p>
+        <div>
+            <a href="/admin/posts" class="btn">取消</a>
+            <button type="submit" class="btn btn-primary">保存文章</button>
+        </div>
+    </div>
 </form>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 <script src="/static/js/editor.js"></script>
+<script src="/static/js/ai-writer.js?v=20261002-1"></script>
 <script>
 const csrfToken = '{{ csrf_token }}';
 const editor = initEditor('content-editor', csrfToken);
 initInlinePreview(editor, 'content-preview');
 initCoverUpload('cover-image-file', 'cover-image-input', 'cover-image-preview', csrfToken);
 initContentImageUpload('content-image-file', editor, csrfToken);
+initAIWriter({ editor, csrfToken });
 </script>
 {% endblock %}

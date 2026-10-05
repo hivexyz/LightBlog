@@ -3,5 +3,5 @@ workers = 2
 worker_class = "uvicorn.workers.UvicornWorker"
 max_requests = 1000
 max_requests_jitter = 50
-timeout = 30
+timeout = 240
 keepalive = 5

@@ -4,20 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}管理后台 - LightBlog{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260907">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260929-7">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="admin-body">
     <aside class="admin-sidebar">
-        <h2>LightBlog</h2>
+        <a class="admin-brand" href="/admin/">
+            <span class="admin-brand-mark" aria-hidden="true">L</span>
+            <span>
+                <strong>LightBlog</strong>
+                <small>内容工作台</small>
+            </span>
+        </a>
         <nav>
-            <a href="/admin/">仪表盘</a>
-            <a href="/admin/posts">文章</a>
-            <a href="/admin/categories">分类</a>
-            <a href="/admin/tags">标签</a>
-            <a href="/admin/settings">设置</a>
+            <a href="/admin/" {% if request is defined and request.url.path == '/admin/' %}class="active"{% endif %}>仪表盘</a>
+            <a href="/admin/posts" {% if request is defined and '/admin/post' in request.url.path %}class="active"{% endif %}>文章</a>
+            <a href="/admin/categories" {% if request is defined and request.url.path == '/admin/categories' %}class="active"{% endif %}>分类</a>
+            <a href="/admin/tags" {% if request is defined and request.url.path == '/admin/tags' %}class="active"{% endif %}>标签</a>
+            <a href="/admin/settings" {% if request is defined and request.url.path == '/admin/settings' %}class="active"{% endif %}>设置</a>
             <a href="/" target="_blank">查看站点</a>
-            <a href="/admin/logout">退出</a>
+            <a class="admin-signout" href="/admin/logout">退出</a>
         </nav>
     </aside>
     <main class="admin-main">
